@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Local environment
+.env
+.env.local
+
+# Build output
+dist/
+build/
+.next/
+
+# Model/data artifacts
+backend/models/*.pkl
+backend/data/
+*.zip
+*.csv
+
+# System files
+.DS_Store
+Thumbs.db
