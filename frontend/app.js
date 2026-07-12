@@ -286,19 +286,19 @@ function renderHistory() {
 }
 
 function trendDirection(samples) {
-  if (samples.length < 2) return "Collecting samples";
+  if (samples.length < 2) return "Trend: collecting";
   const first = samples[0].label;
   const last = samples[samples.length - 1].label;
   const delta = last - first;
-  if (delta > 0) return `Up ${delta} level${delta > 1 ? "s" : ""}`;
-  if (delta < 0) return `Down ${Math.abs(delta)} level${Math.abs(delta) > 1 ? "s" : ""}`;
-  return "Stable";
+  if (delta > 0) return `Trend: up ${delta} level${delta > 1 ? "s" : ""}`;
+  if (delta < 0) return `Trend: down ${Math.abs(delta)} level${Math.abs(delta) > 1 ? "s" : ""}`;
+  return "Trend: stable";
 }
 
 function renderAqiTrend() {
   const samples = [...history()].reverse();
   if (!samples.length) {
-    trendSummary.textContent = "No samples yet";
+    trendSummary.textContent = "Trend: no samples";
     aqiTrendChart.innerHTML = `
       <div class="chart-empty">
         Run a few scenarios to see how AQI level changes as inputs change.
