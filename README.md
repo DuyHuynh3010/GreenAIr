@@ -23,3 +23,16 @@ The trained model files are expected to be placed under `backend/models/`:
 - `hcmc_aqi_future_model.pkl`
 - `hcmc_aqi_future_scaler.pkl`
 
+## Run Locally
+
+```powershell
+python -m venv venv
+.\venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+.\venv\Scripts\python.exe backend\server.py
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000
+```
