@@ -156,6 +156,7 @@ h3 {
 .history-panel,
 .input-surface,
 .insight-surface,
+.trend-panel,
 .analysis-panel {
   position: relative;
   overflow: hidden;
@@ -176,6 +177,7 @@ h3 {
 .history-panel::before,
 .input-surface::before,
 .insight-surface::before,
+.trend-panel::before,
 .analysis-panel::before {
   position: absolute;
   inset: 0 0 auto;
@@ -188,6 +190,7 @@ h3 {
 .history-panel:hover,
 .input-surface:hover,
 .insight-surface:hover,
+.trend-panel:hover,
 .analysis-panel:hover {
   transform: translateY(-2px);
   box-shadow:
@@ -474,8 +477,110 @@ h3 {
 
 .input-surface,
 .insight-surface,
+.trend-panel,
 .analysis-panel {
   padding: 20px;
+}
+
+.trend-panel {
+  margin-top: 20px;
+}
+
+.trend-panel .panel-heading {
+  align-items: flex-start;
+}
+
+.trend-panel .panel-heading span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+#trendSummary {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  color: #03120d;
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  border-radius: 8px;
+  box-shadow:
+    0 14px 28px rgba(53, 230, 166, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  font-size: 13px;
+}
+
+.aqi-chart {
+  position: relative;
+  min-height: 250px;
+  margin-top: 16px;
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
+    rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(160, 255, 218, 0.12);
+  border-radius: 8px;
+  box-shadow:
+    inset 0 2px 18px rgba(0, 0, 0, 0.32),
+    0 18px 36px rgba(0, 0, 0, 0.22);
+}
+
+.aqi-chart::before {
+  position: absolute;
+  inset: -40% -20% auto;
+  height: 70%;
+  pointer-events: none;
+  content: "";
+  background: radial-gradient(ellipse at center, rgba(71, 201, 255, 0.12), transparent 64%);
+}
+
+.aqi-chart svg {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 250px;
+}
+
+.chart-empty {
+  display: grid;
+  min-height: 250px;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.chart-grid-line {
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 1;
+}
+
+.chart-axis-label,
+.chart-axis-caption,
+.chart-point-label {
+  fill: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chart-area {
+  fill: url("#aqiAreaGradient");
+}
+
+.chart-line {
+  fill: none;
+  stroke: url("#aqiLineGradient");
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 5;
+}
+
+.chart-point-halo {
+  fill: rgba(53, 230, 166, 0.12);
+}
+
+.chart-point {
+  stroke: rgba(255, 255, 255, 0.62);
+  stroke-width: 2;
 }
 
 .analysis-grid {

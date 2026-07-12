@@ -18,6 +18,8 @@ const runButton = document.querySelector("#runButton");
 const explanationList = document.querySelector("#explanationList");
 const guidanceList = document.querySelector("#guidanceList");
 const modelInfo = document.querySelector("#modelInfo");
+const aqiTrendChart = document.querySelector("#aqiTrendChart");
+const trendSummary = document.querySelector("#trendSummary");
 
 let mode = "current";
 let modelsReady = { current: false, future: false };
@@ -249,6 +251,7 @@ function saveHistory(result, submittedFeatures) {
   ].slice(0, 8);
   localStorage.setItem("greenair-history", JSON.stringify(next));
   renderHistory();
+  renderAqiTrend();
 }
 
 function latestFeatureHistory(currentValues) {
@@ -280,6 +283,88 @@ function renderHistory() {
     `;
     historyList.appendChild(row);
   });
+}
+
+function trendDirection(samples) {
+  if (samples.length < 2) return "Collecting samples";
+  const first = samples[0].label;
+  const last = samples[samples.length - 1].label;
+  const delta = last - first;
+  if (delta > 0) return `Up ${delta} level${delta > 1 ? "s" : ""}`;
+  if (delta < 0) return `Down ${Math.abs(delta)} level${Math.abs(delta) > 1 ? "s" : ""}`;
+  return "Stable";
+}
+
+function renderAqiTrend() {
+  const samples = [...history()].reverse();
+  if (!samples.length) {
+    trendSummary.textContent = "No samples yet";
+    aqiTrendChart.innerHTML = `
+      <div class="chart-empty">
+        Run a few scenarios to see how AQI level changes as inputs change.
+      </div>
+    `;
+    return;
+  }
+
+  const width = 720;
+  const height = 230;
+  const pad = { top: 22, right: 22, bottom: 42, left: 44 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const xFor = (index) => pad.left + (samples.length === 1 ? plotWidth / 2 : (index / (samples.length - 1)) * plotWidth);
+  const yFor = (level) => pad.top + ((5 - level) / 4) * plotHeight;
+  const points = samples.map((sample, index) => `${xFor(index)},${yFor(sample.label)}`).join(" ");
+  const areaPoints = `${pad.left},${pad.top + plotHeight} ${points} ${pad.left + plotWidth},${pad.top + plotHeight}`;
+
+  trendSummary.textContent = trendDirection(samples);
+  aqiTrendChart.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="AQI level movement from prediction history">
+      <defs>
+        <linearGradient id="aqiLineGradient" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stop-color="#35e6a6" />
+          <stop offset="55%" stop-color="#ffbd4a" />
+          <stop offset="100%" stop-color="#ff5964" />
+        </linearGradient>
+        <linearGradient id="aqiAreaGradient" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#35e6a6" stop-opacity="0.26" />
+          <stop offset="100%" stop-color="#35e6a6" stop-opacity="0.02" />
+        </linearGradient>
+        <filter id="aqiGlow">
+          <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+          <feMerge>
+            <feMergeNode in="coloredBlur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      ${[1, 2, 3, 4, 5]
+        .map((level) => {
+          const y = yFor(level);
+          return `
+            <line class="chart-grid-line" x1="${pad.left}" y1="${y}" x2="${pad.left + plotWidth}" y2="${y}" />
+            <text class="chart-axis-label" x="16" y="${y + 4}">${level}</text>
+          `;
+        })
+        .join("")}
+      <text class="chart-axis-caption" x="${pad.left}" y="18">AQI level</text>
+      <polygon class="chart-area" points="${areaPoints}" />
+      <polyline class="chart-line" points="${points}" filter="url(#aqiGlow)" />
+      ${samples
+        .map((sample, index) => {
+          const x = xFor(index);
+          const y = yFor(sample.label);
+          return `
+            <g class="chart-point-group">
+              <circle class="chart-point-halo" cx="${x}" cy="${y}" r="13"></circle>
+              <circle class="chart-point ${toneClass(sample.tone)}" cx="${x}" cy="${y}" r="7"></circle>
+              <text class="chart-point-label" x="${x}" y="${height - 14}">${index + 1}</text>
+            </g>
+          `;
+        })
+        .join("")}
+    </svg>
+  `;
 }
 
 async function checkHealth() {
@@ -350,10 +435,12 @@ form.addEventListener("input", () => renderBars(getFormData()));
 clearHistory.addEventListener("click", () => {
   localStorage.removeItem("greenair-history");
   renderHistory();
+  renderAqiTrend();
 });
 
 fillForm(presets.busy);
 renderHistory();
+renderAqiTrend();
 renderExplanations([]);
 renderGuidance([]);
 checkHealth();
