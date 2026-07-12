@@ -13,6 +13,9 @@ Build a local demo website that lets users enter air quality indicators, runs a 
 - Visual dashboard for pollutant values
 - Local prediction history
 - Optional next-hour forecast using lag-based model files
+- AI explanation cards for the strongest prediction drivers
+- Audience-specific guidance for children, older adults, respiratory risk groups, and commuters
+- Model transparency panel with feature and output metadata
 
 ## Model Files
 
@@ -36,3 +39,9 @@ Then open:
 ```text
 http://127.0.0.1:8000
 ```
+
+## Local API
+
+- `GET /api/health` returns model readiness and model metadata.
+- `POST /api/predict/current` returns current AQI classification, explanation drivers, and guidance.
+- `POST /api/predict/future` returns next-hour AQI forecasting using current values and previous values as lag inputs.

@@ -1,0 +1,353 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+try:
+    import joblib
+    import pandas as pd
+except ImportError:
+    joblib = None
+    pd = None
+
+
+MODELS_DIR = Path(__file__).resolve().parent / "models"
+
+CURRENT_FEATURES = [
+    "co",
+    "no",
+    "no2",
+    "o3",
+    "so2",
+    "pm2_5",
+    "pm10",
+    "nh3",
+    "temperature_C",
+    "humidity_%",
+    "rain_mm",
+    "wind_speed_kmh",
+    "is_event_anomaly",
+]
+
+FUTURE_FEATURES = [
+    "hour",
+    "month",
+    "dayofweek",
+    "co_lag1",
+    "no_lag1",
+    "no2_lag1",
+    "o3_lag1",
+    "so2_lag1",
+    "pm2_5_lag1",
+    "pm10_lag1",
+    "nh3_lag1",
+    "temperature_C_lag1",
+    "humidity_%_lag1",
+    "rain_mm_lag1",
+    "wind_speed_kmh_lag1",
+    "pm2_5_lag2",
+    "pm10_lag2",
+    "o3_lag2",
+    "co_lag2",
+]
+
+FEATURE_LABELS = {
+    "co": "Carbon monoxide (CO)",
+    "no": "Nitric oxide (NO)",
+    "no2": "Nitrogen dioxide (NO2)",
+    "o3": "Ozone (O3)",
+    "so2": "Sulfur dioxide (SO2)",
+    "pm2_5": "Fine particles (PM2.5)",
+    "pm10": "Coarse particles (PM10)",
+    "nh3": "Ammonia (NH3)",
+    "temperature_C": "Temperature",
+    "humidity_%": "Humidity",
+    "rain_mm": "Rainfall",
+    "wind_speed_kmh": "Wind speed",
+}
+
+FEATURE_LIMITS = {
+    "co": 1000.0,
+    "no": 8.0,
+    "no2": 80.0,
+    "o3": 80.0,
+    "so2": 40.0,
+    "pm2_5": 150.0,
+    "pm10": 200.0,
+    "nh3": 10.0,
+    "temperature_C": 45.0,
+    "humidity_%": 100.0,
+    "rain_mm": 50.0,
+    "wind_speed_kmh": 40.0,
+}
+
+AQI_LEVELS = {
+    1: {
+        "status": "Good",
+        "tone": "good",
+        "advice": "Air quality is stable. Outdoor activity is generally fine.",
+    },
+    2: {
+        "status": "Moderate",
+        "tone": "moderate",
+        "advice": "Air quality is acceptable. Sensitive people should watch symptoms during long outdoor activity.",
+    },
+    3: {
+        "status": "Unhealthy for Sensitive Groups",
+        "tone": "unhealthy-sensitive",
+        "advice": "Sensitive groups should reduce prolonged outdoor exposure and consider a mask near traffic.",
+    },
+    4: {
+        "status": "Unhealthy",
+        "tone": "unhealthy",
+        "advice": "Limit outdoor activity. Children, older adults, and people with respiratory conditions should stay indoors where possible.",
+    },
+    5: {
+        "status": "Very Unhealthy / Hazardous",
+        "tone": "hazardous",
+        "advice": "Health alert. Stay indoors, close windows, and use air filtration if available.",
+    },
+}
+
+AUDIENCE_GUIDANCE = {
+    "children": [
+        "Prefer indoor play when AQI reaches level 3 or higher.",
+        "Avoid heavy outdoor exercise near traffic corridors.",
+    ],
+    "older_adults": [
+        "Keep outdoor trips short during unhealthy air periods.",
+        "Monitor breathing, dizziness, or chest discomfort.",
+    ],
+    "respiratory": [
+        "Carry medication or inhaler if prescribed.",
+        "Use a well-fitted mask and avoid peak traffic hours.",
+    ],
+    "commuters": [
+        "Choose less congested routes when possible.",
+        "Use a mask during high PM2.5 or PM10 conditions.",
+    ],
+}
+
+
+class InputError(ValueError):
+    pass
+
+
+class ModelStore:
+    def __init__(self) -> None:
+        self.current_model = None
+        self.current_scaler = None
+        self.future_model = None
+        self.future_scaler = None
+        self.error = ""
+        self.load()
+
+    def load(self) -> None:
+        if joblib is None or pd is None:
+            self.error = "Missing Python packages. Install backend/requirements.txt before running inference."
+            return
+
+        try:
+            self.current_model = joblib.load(MODELS_DIR / "hcmc_rf_model.pkl")
+            self.current_scaler = joblib.load(MODELS_DIR / "hcmc_scaler.pkl")
+            future_model_path = MODELS_DIR / "hcmc_aqi_future_model.pkl"
+            future_scaler_path = MODELS_DIR / "hcmc_aqi_future_scaler.pkl"
+            if future_model_path.exists() and future_scaler_path.exists():
+                self.future_model = joblib.load(future_model_path)
+                self.future_scaler = joblib.load(future_scaler_path)
+        except Exception as exc:
+            self.error = str(exc)
+
+    @property
+    def current_ready(self) -> bool:
+        return self.current_model is not None and self.current_scaler is not None
+
+    @property
+    def future_ready(self) -> bool:
+        return self.future_model is not None and self.future_scaler is not None
+
+    def health(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "current_model_ready": self.current_ready,
+            "future_model_ready": self.future_ready,
+            "error": self.error,
+            "model_info": model_info(),
+        }
+
+
+MODELS = ModelStore()
+
+
+def model_info() -> dict[str, Any]:
+    return {
+        "project": "GreenAIr",
+        "current_model": "RandomForestClassifier for current AQI classification",
+        "future_model": "Lag-based RandomForestClassifier for next-hour AQI forecasting",
+        "current_features": CURRENT_FEATURES,
+        "future_features": FUTURE_FEATURES,
+        "output": "AQI risk level from 1 to 5",
+        "demo_note": "Predictions are generated from teammate-provided trained model files. Presets are sample demo scenarios, not live sensor readings.",
+    }
+
+
+def to_float(payload: dict[str, Any], key: str, default: float = 0.0) -> float:
+    value = payload.get(key, default)
+    if value in ("", None):
+        return default
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise InputError(f"{key} must be a number.") from exc
+    if number < 0 and key not in ("temperature_C", "temp"):
+        raise InputError(f"{key} cannot be negative.")
+    return number
+
+
+def build_current_row(payload: dict[str, Any]) -> dict[str, float]:
+    row = {
+        "co": to_float(payload, "co"),
+        "no": to_float(payload, "no"),
+        "no2": to_float(payload, "no2"),
+        "o3": to_float(payload, "o3"),
+        "so2": to_float(payload, "so2"),
+        "pm2_5": to_float(payload, "pm2_5"),
+        "pm10": to_float(payload, "pm10"),
+        "nh3": to_float(payload, "nh3"),
+        "temperature_C": to_float(payload, "temperature_C", to_float(payload, "temp", 30.0)),
+        "humidity_%": to_float(payload, "humidity_%", to_float(payload, "humidity", 70.0)),
+        "rain_mm": to_float(payload, "rain_mm", to_float(payload, "rain", 0.0)),
+        "wind_speed_kmh": to_float(payload, "wind_speed_kmh", to_float(payload, "wind", 8.0)),
+        "is_event_anomaly": to_float(payload, "is_event_anomaly", 0.0),
+    }
+    if row["humidity_%"] > 100:
+        raise InputError("humidity_% cannot be greater than 100.")
+    return row
+
+
+def level_payload(label: int, kind: str) -> dict[str, Any]:
+    details = AQI_LEVELS.get(label, AQI_LEVELS[5])
+    return {
+        "kind": kind,
+        "aqi_label": label,
+        "status": details["status"],
+        "tone": details["tone"],
+        "advice": details["advice"],
+    }
+
+
+def explain_features(row: dict[str, float], model: Any | None = None) -> list[dict[str, Any]]:
+    normalized = []
+    for key, limit in FEATURE_LIMITS.items():
+        value = row.get(key)
+        if value is None:
+            continue
+        normalized.append(
+            {
+                "key": key,
+                "label": FEATURE_LABELS.get(key, key),
+                "value": value,
+                "score": min(1.0, abs(value) / limit) if limit else 0.0,
+            }
+        )
+
+    if model is not None and hasattr(model, "feature_importances_"):
+        importances = dict(zip(CURRENT_FEATURES, model.feature_importances_))
+        for item in normalized:
+            item["importance"] = float(importances.get(item["key"], 0.0))
+            item["impact_score"] = item["score"] * (0.65 + item["importance"] * 4)
+    else:
+        for item in normalized:
+            item["importance"] = 0.0
+            item["impact_score"] = item["score"]
+
+    top = sorted(normalized, key=lambda item: item["impact_score"], reverse=True)[:4]
+    for item in top:
+        item["message"] = explanation_message(item["key"], item["value"], item["score"])
+    return top
+
+
+def explanation_message(key: str, value: float, score: float) -> str:
+    label = FEATURE_LABELS.get(key, key)
+    if score >= 0.75:
+        return f"{label} is elevated in this sample and likely raises the predicted risk."
+    if score >= 0.45:
+        return f"{label} is noticeable and contributes to the overall AQI classification."
+    return f"{label} is part of the model input but is not extreme in this sample."
+
+
+def audience_guidance(label: int) -> list[dict[str, Any]]:
+    severity = max(0, label - 2)
+    groups = [
+        ("Children", "children"),
+        ("Older adults", "older_adults"),
+        ("Respiratory conditions", "respiratory"),
+        ("Commuters", "commuters"),
+    ]
+    return [
+        {
+            "group": group,
+            "priority": "High" if severity >= 2 else "Watch",
+            "tips": AUDIENCE_GUIDANCE[key] if severity else [AUDIENCE_GUIDANCE[key][0]],
+        }
+        for group, key in groups
+    ]
+
+
+def predict_current(payload: dict[str, Any]) -> dict[str, Any]:
+    if not MODELS.current_ready:
+        raise RuntimeError(MODELS.error or "Current AQI model is not ready.")
+    row = build_current_row(payload)
+    input_df = pd.DataFrame([row], columns=CURRENT_FEATURES)
+    scaled = MODELS.current_scaler.transform(input_df)
+    label = int(MODELS.current_model.predict(scaled)[0])
+    result = level_payload(label, "current")
+    result["features"] = row
+    result["explanations"] = explain_features(row, MODELS.current_model)
+    result["audience_guidance"] = audience_guidance(label)
+    return result
+
+
+def predict_future(payload: dict[str, Any]) -> dict[str, Any]:
+    if not MODELS.future_ready:
+        raise RuntimeError(MODELS.error or "Future AQI model is not ready.")
+
+    current = payload.get("current") or payload
+    history = payload.get("history") or current
+    now_text = payload.get("timestamp")
+    now = datetime.fromisoformat(now_text.replace("Z", "+00:00")) if now_text else datetime.now()
+    target = now + timedelta(hours=1)
+
+    row = {
+        "hour": target.hour,
+        "month": target.month,
+        "dayofweek": target.weekday(),
+        "co_lag1": to_float(current, "co"),
+        "no_lag1": to_float(current, "no"),
+        "no2_lag1": to_float(current, "no2"),
+        "o3_lag1": to_float(current, "o3"),
+        "so2_lag1": to_float(current, "so2"),
+        "pm2_5_lag1": to_float(current, "pm2_5"),
+        "pm10_lag1": to_float(current, "pm10"),
+        "nh3_lag1": to_float(current, "nh3"),
+        "temperature_C_lag1": to_float(current, "temperature_C", to_float(current, "temp", 30.0)),
+        "humidity_%_lag1": to_float(current, "humidity_%", to_float(current, "humidity", 70.0)),
+        "rain_mm_lag1": to_float(current, "rain_mm", to_float(current, "rain", 0.0)),
+        "wind_speed_kmh_lag1": to_float(current, "wind_speed_kmh", to_float(current, "wind", 8.0)),
+        "pm2_5_lag2": to_float(history, "pm2_5"),
+        "pm10_lag2": to_float(history, "pm10"),
+        "o3_lag2": to_float(history, "o3"),
+        "co_lag2": to_float(history, "co"),
+    }
+
+    input_df = pd.DataFrame([row], columns=FUTURE_FEATURES)
+    scaled = MODELS.future_scaler.transform(input_df)
+    label = int(MODELS.future_model.predict(scaled)[0])
+    result = level_payload(label, "future")
+    current_row = build_current_row(current)
+    result["target_time"] = target.isoformat(timespec="minutes")
+    result["features"] = row
+    result["explanations"] = explain_features(current_row, MODELS.current_model)
+    result["audience_guidance"] = audience_guidance(label)
+    return result

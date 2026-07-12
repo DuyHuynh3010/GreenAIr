@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -12,35 +12,36 @@
         <div class="brand">
           <div class="brand-mark">GA</div>
           <div>
-            <p class="eyebrow">Hackathon AI moi truong</p>
+            <p class="eyebrow">Environmental AI Hackathon</p>
             <h1>GreenAIr</h1>
           </div>
         </div>
 
         <section class="status-panel" aria-live="polite">
           <div class="status-row">
-            <span>Model hien tai</span>
-            <strong id="currentModelState">Dang kiem tra</strong>
+            <span>Current AQI model</span>
+            <strong id="currentModelState">Checking</strong>
           </div>
           <div class="status-row">
-            <span>Du bao 1 gio</span>
-            <strong id="futureModelState">Dang kiem tra</strong>
+            <span>Next-hour model</span>
+            <strong id="futureModelState">Checking</strong>
           </div>
         </section>
 
         <section class="preset-panel">
-          <p class="panel-title">Mau nhanh</p>
+          <p class="panel-title">Demo Scenarios</p>
           <div class="preset-list">
-            <button class="preset-button" data-preset="clear">Tot</button>
-            <button class="preset-button" data-preset="busy">Gio cao diem</button>
-            <button class="preset-button" data-preset="alert">Canh bao</button>
+            <button class="preset-button" data-preset="clear" type="button">Clean morning</button>
+            <button class="preset-button" data-preset="busy" type="button">Rush hour</button>
+            <button class="preset-button" data-preset="alert" type="button">Pollution alert</button>
+            <button class="preset-button" data-preset="rain" type="button">After rain</button>
           </div>
         </section>
 
         <section class="history-panel">
           <div class="panel-heading">
-            <p class="panel-title">Lich su</p>
-            <button id="clearHistory" class="icon-button" title="Xoa lich su" aria-label="Xoa lich su">
+            <p class="panel-title">Prediction History</p>
+            <button id="clearHistory" class="icon-button" title="Clear history" aria-label="Clear history">
               <span aria-hidden="true">x</span>
             </button>
           </div>
@@ -51,12 +52,12 @@
       <section class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">TP.HCM air quality classifier</p>
-            <h2>Bang dieu khien du doan AQI</h2>
+            <p class="eyebrow">Ho Chi Minh City air quality classifier</p>
+            <h2>AI Air Quality Dashboard</h2>
           </div>
           <div class="mode-switch" role="tablist" aria-label="Prediction mode">
-            <button id="currentMode" class="mode-button active" type="button">Hien tai</button>
-            <button id="futureMode" class="mode-button" type="button">+1 gio</button>
+            <button id="currentMode" class="mode-button active" type="button">Current</button>
+            <button id="futureMode" class="mode-button" type="button">+1 hour</button>
           </div>
         </header>
 
@@ -65,13 +66,13 @@
             <span id="aqiNumber">--</span>
           </div>
           <div class="result-copy">
-            <p class="result-kicker" id="resultKind">San sang</p>
-            <h3 id="resultTitle">Nhap chi so de chay model</h3>
-            <p id="resultAdvice">Ket qua se hien thi tai day sau khi backend tra ve du doan.</p>
+            <p class="result-kicker" id="resultKind">Ready</p>
+            <h3 id="resultTitle">Enter air indicators to run the model</h3>
+            <p id="resultAdvice">The trained model result and health recommendation will appear here.</p>
           </div>
           <div class="target-time">
-            <span>Moc du doan</span>
-            <strong id="targetTime">Bay gio</strong>
+            <span>Prediction time</span>
+            <strong id="targetTime">Now</strong>
           </div>
         </section>
 
@@ -79,70 +80,60 @@
           <form id="predictionForm" class="input-surface">
             <div class="form-heading">
               <div>
-                <p class="panel-title">Chi so dau vao</p>
-                <span id="formModeLabel">Phan loai hien tai</span>
+                <p class="panel-title">Model Inputs</p>
+                <span id="formModeLabel">Current AQI classification</span>
               </div>
-              <button class="primary-button" type="submit">Chay AI</button>
+              <button id="runButton" class="primary-button" type="submit">Run AI</button>
             </div>
 
             <div class="input-grid">
-              <label>
-                CO
-                <input name="co" type="number" step="0.1" min="0" value="500" />
-              </label>
-              <label>
-                NO
-                <input name="no" type="number" step="0.1" min="0" value="1.5" />
-              </label>
-              <label>
-                NO2
-                <input name="no2" type="number" step="0.1" min="0" value="18" />
-              </label>
-              <label>
-                O3
-                <input name="o3" type="number" step="0.1" min="0" value="15" />
-              </label>
-              <label>
-                SO2
-                <input name="so2" type="number" step="0.1" min="0" value="10" />
-              </label>
-              <label>
-                PM2.5
-                <input name="pm2_5" type="number" step="0.1" min="0" value="70" />
-              </label>
-              <label>
-                PM10
-                <input name="pm10" type="number" step="0.1" min="0" value="16" />
-              </label>
-              <label>
-                NH3
-                <input name="nh3" type="number" step="0.1" min="0" value="2.5" />
-              </label>
-              <label>
-                Nhiet do C
-                <input name="temperature_C" type="number" step="0.1" value="28.5" />
-              </label>
-              <label>
-                Do am %
-                <input name="humidity_%" type="number" step="0.1" min="0" max="100" value="85" />
-              </label>
-              <label>
-                Mua mm
-                <input name="rain_mm" type="number" step="0.1" min="0" value="0" />
-              </label>
-              <label>
-                Gio km/h
-                <input name="wind_speed_kmh" type="number" step="0.1" min="0" value="8" />
-              </label>
+              <label>CO <input name="co" type="number" step="0.1" min="0" value="500" /></label>
+              <label>NO <input name="no" type="number" step="0.1" min="0" value="1.5" /></label>
+              <label>NO2 <input name="no2" type="number" step="0.1" min="0" value="18" /></label>
+              <label>O3 <input name="o3" type="number" step="0.1" min="0" value="15" /></label>
+              <label>SO2 <input name="so2" type="number" step="0.1" min="0" value="10" /></label>
+              <label>PM2.5 <input name="pm2_5" type="number" step="0.1" min="0" value="70" /></label>
+              <label>PM10 <input name="pm10" type="number" step="0.1" min="0" value="16" /></label>
+              <label>NH3 <input name="nh3" type="number" step="0.1" min="0" value="2.5" /></label>
+              <label>Temperature C <input name="temperature_C" type="number" step="0.1" value="28.5" /></label>
+              <label>Humidity % <input name="humidity_%" type="number" step="0.1" min="0" max="100" value="85" /></label>
+              <label>Rain mm <input name="rain_mm" type="number" step="0.1" min="0" value="0" /></label>
+              <label>Wind km/h <input name="wind_speed_kmh" type="number" step="0.1" min="0" value="8" /></label>
             </div>
           </form>
 
           <section class="insight-surface">
             <div class="panel-heading">
-              <p class="panel-title">Thanh phan khong khi</p>
-              <span id="sampleStamp">Mau hien tai</span>
+              <p class="panel-title">Input Profile</p>
+              <span id="sampleStamp">Current sample</span>
             </div>
             <div id="pollutantBars" class="bars"></div>
+          </section>
+        </section>
+
+        <section class="analysis-grid">
+          <section class="analysis-panel">
+            <div class="panel-heading">
+              <p class="panel-title">AI Explanation</p>
+              <span>Top drivers</span>
+            </div>
+            <div id="explanationList" class="explanation-list"></div>
+          </section>
+
+          <section class="analysis-panel">
+            <div class="panel-heading">
+              <p class="panel-title">Health Guidance</p>
+              <span>Audience specific</span>
+            </div>
+            <div id="guidanceList" class="guidance-list"></div>
+          </section>
+
+          <section class="analysis-panel model-panel">
+            <div class="panel-heading">
+              <p class="panel-title">Model Info</p>
+              <span>Demo transparency</span>
+            </div>
+            <div id="modelInfo" class="model-info"></div>
           </section>
         </section>
       </section>
