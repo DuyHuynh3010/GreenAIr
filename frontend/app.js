@@ -20,6 +20,8 @@ const guidanceList = document.querySelector("#guidanceList");
 const modelInfo = document.querySelector("#modelInfo");
 const aqiTrendChart = document.querySelector("#aqiTrendChart");
 const trendSummary = document.querySelector("#trendSummary");
+const comparisonGrid = document.querySelector("#comparisonGrid");
+const comparisonSummary = document.querySelector("#comparisonSummary");
 
 let mode = "current";
 let modelsReady = { current: false, future: false };
@@ -112,6 +114,8 @@ const featureLabels = {
   rain_mm: "Rain",
   wind_speed_kmh: "Wind",
 };
+
+const comparisonKeys = ["pm2_5", "pm10", "co", "no2"];
 
 function getFormData() {
   const data = new FormData(form);
@@ -238,6 +242,7 @@ function history() {
 }
 
 function saveHistory(result, submittedFeatures) {
+  const primaryDriver = result.explanations?.[0];
   const next = [
     {
       label: result.aqi_label,
@@ -246,12 +251,20 @@ function saveHistory(result, submittedFeatures) {
       kind: result.kind,
       time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
       features: submittedFeatures,
+      driver: primaryDriver
+        ? {
+            label: primaryDriver.label,
+            value: primaryDriver.value,
+            score: primaryDriver.score,
+          }
+        : null,
     },
     ...history(),
   ].slice(0, 8);
   localStorage.setItem("greenair-history", JSON.stringify(next));
   renderHistory();
   renderAqiTrend();
+  renderScenarioComparison();
 }
 
 function latestFeatureHistory(currentValues) {
@@ -367,6 +380,72 @@ function renderAqiTrend() {
   `;
 }
 
+function comparisonDeltaText(item, bestLevel) {
+  const delta = item.label - bestLevel;
+  if (delta === 0) return "Lowest risk in this comparison";
+  return `+${delta} AQI level${delta > 1 ? "s" : ""} vs lowest`;
+}
+
+function renderScenarioComparison() {
+  const items = history().slice(0, 3);
+  if (items.length < 2) {
+    comparisonSummary.textContent = "Run at least 2 scenarios";
+    comparisonGrid.innerHTML = `
+      <div class="chart-empty comparison-empty">
+        Run different presets or edit inputs, then click Run AI to compare scenarios here.
+      </div>
+    `;
+    return;
+  }
+
+  const bestLevel = Math.min(...items.map((item) => item.label));
+  const worstLevel = Math.max(...items.map((item) => item.label));
+  comparisonSummary.textContent =
+    bestLevel === worstLevel ? "Same AQI level" : `${worstLevel - bestLevel} level spread`;
+  comparisonGrid.innerHTML = "";
+
+  items.forEach((item, index) => {
+    const features = item.features || {};
+    const card = document.createElement("article");
+    card.className = "comparison-card";
+    card.innerHTML = `
+      <div class="comparison-card-head">
+        <div>
+          <span>Scenario ${items.length - index}</span>
+          <strong>${item.kind === "future" ? "Next-hour forecast" : "Current AQI"}</strong>
+        </div>
+        <div class="comparison-score ${toneClass(item.tone)}">${item.label}</div>
+      </div>
+      <div class="comparison-status">
+        <strong>${item.status}</strong>
+        <span>${comparisonDeltaText(item, bestLevel)}</span>
+      </div>
+      <div class="comparison-driver">
+        <span>Top driver</span>
+        <strong>${item.driver?.label || "Not available"}</strong>
+      </div>
+      <div class="comparison-bars">
+        ${comparisonKeys
+          .map((key) => {
+            const value = Number(features[key] || 0);
+            const width = Math.max(2, Math.min(100, (value / barLimits[key]) * 100));
+            return `
+              <div class="comparison-bar-row">
+                <span>${featureLabels[key]}</span>
+                <div class="comparison-bar-track">
+                  <div class="comparison-bar-fill" style="width:${width}%"></div>
+                </div>
+                <strong>${Number.isInteger(value) ? value : value.toFixed(1)}</strong>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+    comparisonGrid.appendChild(card);
+  });
+}
+
 async function checkHealth() {
   try {
     const response = await fetch("/api/health");
@@ -436,11 +515,13 @@ clearHistory.addEventListener("click", () => {
   localStorage.removeItem("greenair-history");
   renderHistory();
   renderAqiTrend();
+  renderScenarioComparison();
 });
 
 fillForm(presets.busy);
 renderHistory();
 renderAqiTrend();
+renderScenarioComparison();
 renderExplanations([]);
 renderGuidance([]);
 checkHealth();
