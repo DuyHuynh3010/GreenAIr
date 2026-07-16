@@ -22,9 +22,16 @@ const aqiTrendChart = document.querySelector("#aqiTrendChart");
 const trendSummary = document.querySelector("#trendSummary");
 const comparisonGrid = document.querySelector("#comparisonGrid");
 const comparisonSummary = document.querySelector("#comparisonSummary");
+const liveStatus = document.querySelector("#liveStatus");
+const liveTimestamp = document.querySelector("#liveTimestamp");
+const stationName = document.querySelector("#stationName");
+const fetchLiveButton = document.querySelector("#fetchLiveButton");
+const autoLiveButton = document.querySelector("#autoLiveButton");
 
 let mode = "current";
 let modelsReady = { current: false, future: false };
+let liveCursor = 0;
+let autoLiveTimer = null;
 
 const presets = {
   clear: {
@@ -85,6 +92,29 @@ const presets = {
   },
 };
 
+const liveStations = [
+  {
+    name: "District 1 urban station",
+    scenario: "busy",
+    note: "Rush-hour traffic corridor",
+  },
+  {
+    name: "Thu Duc riverside station",
+    scenario: "clear",
+    note: "Cleaner morning air sample",
+  },
+  {
+    name: "Binh Thanh residential station",
+    scenario: "rain",
+    note: "After-rain humidity sample",
+  },
+  {
+    name: "Tan Binh airport corridor",
+    scenario: "alert",
+    note: "High-pollution alert sample",
+  },
+];
+
 const barLimits = {
   co: 1000,
   no: 8,
@@ -128,6 +158,48 @@ function fillForm(values) {
     if (input) input.value = value;
   });
   renderBars(getFormData());
+}
+
+function jitterValue(value, ratio = 0.06) {
+  const offset = value * ratio * (Math.random() - 0.5);
+  return Math.max(0, Number((value + offset).toFixed(1)));
+}
+
+function buildLiveSample(station) {
+  const base = presets[station.scenario];
+  return Object.fromEntries(Object.entries(base).map(([key, value]) => [key, jitterValue(value)]));
+}
+
+async function fetchLiveSample({ auto = false } = {}) {
+  if (!modelsReady.current) {
+    liveStatus.textContent = "Model offline";
+    return;
+  }
+
+  const station = liveStations[liveCursor % liveStations.length];
+  liveCursor += 1;
+  const sample = buildLiveSample(station);
+
+  stationName.textContent = station.name;
+  liveTimestamp.textContent = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  liveStatus.textContent = auto ? "Auto live feed" : "Live sample loaded";
+  fillForm(sample);
+  setMode("current");
+  await runPrediction(sample);
+}
+
+function toggleAutoLive() {
+  if (autoLiveTimer) {
+    clearInterval(autoLiveTimer);
+    autoLiveTimer = null;
+    autoLiveButton.textContent = "Auto live: off";
+    liveStatus.textContent = "Manual mode";
+    return;
+  }
+
+  autoLiveButton.textContent = "Auto live: on";
+  fetchLiveSample({ auto: true });
+  autoLiveTimer = setInterval(() => fetchLiveSample({ auto: true }), 6000);
 }
 
 function setMode(nextMode) {
@@ -472,6 +544,10 @@ async function checkHealth() {
 async function submitPrediction(event) {
   event.preventDefault();
   const values = getFormData();
+  await runPrediction(values);
+}
+
+async function runPrediction(values) {
   renderBars(values);
   form.classList.add("is-loading");
   runButton.textContent = "Running...";
@@ -517,6 +593,8 @@ clearHistory.addEventListener("click", () => {
   renderAqiTrend();
   renderScenarioComparison();
 });
+fetchLiveButton.addEventListener("click", () => fetchLiveSample());
+autoLiveButton.addEventListener("click", toggleAutoLive);
 
 fillForm(presets.busy);
 renderHistory();

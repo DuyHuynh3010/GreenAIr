@@ -105,6 +105,37 @@
           <div id="comparisonGrid" class="comparison-grid"></div>
         </section>
 
+        <section class="live-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-title">Live Data Demo</p>
+              <span>Simulated realtime station feed for presentation mode</span>
+            </div>
+            <strong id="liveStatus">Manual mode</strong>
+          </div>
+          <div class="live-grid">
+            <div class="live-map">
+              <div class="map-pin" aria-hidden="true"></div>
+              <div>
+                <span>Station</span>
+                <strong id="stationName">District 1 urban station</strong>
+              </div>
+            </div>
+            <div class="live-meta">
+              <span>Last sync</span>
+              <strong id="liveTimestamp">Not synced</strong>
+            </div>
+            <div class="live-meta">
+              <span>Source</span>
+              <strong>Demo realtime feed</strong>
+            </div>
+            <div class="live-actions">
+              <button id="fetchLiveButton" class="secondary-button" type="button">Fetch live sample</button>
+              <button id="autoLiveButton" class="secondary-button" type="button">Auto live: off</button>
+            </div>
+          </div>
+        </section>
+
         <section class="content-grid">
           <form id="predictionForm" class="input-surface">
             <div class="form-heading">
