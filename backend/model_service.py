@@ -116,6 +116,56 @@ FEATURE_LIMITS = {
     "wind_speed_kmh": 40.0,
 }
 
+AQI_BREAKPOINTS = {
+    "pm2_5": [
+        (0.0, 12.0, 0, 50),
+        (12.1, 35.4, 51, 100),
+        (35.5, 55.4, 101, 150),
+        (55.5, 150.4, 151, 200),
+        (150.5, 250.4, 201, 300),
+        (250.5, 500.4, 301, 500),
+    ],
+    "pm10": [
+        (0.0, 54.0, 0, 50),
+        (55.0, 154.0, 51, 100),
+        (155.0, 254.0, 101, 150),
+        (255.0, 354.0, 151, 200),
+        (355.0, 424.0, 201, 300),
+        (425.0, 604.0, 301, 500),
+    ],
+    "o3": [
+        (0.0, 54.0, 0, 50),
+        (55.0, 70.0, 51, 100),
+        (71.0, 85.0, 101, 150),
+        (86.0, 105.0, 151, 200),
+        (106.0, 200.0, 201, 300),
+    ],
+    "no2": [
+        (0.0, 53.0, 0, 50),
+        (54.0, 100.0, 51, 100),
+        (101.0, 360.0, 101, 150),
+        (361.0, 649.0, 151, 200),
+        (650.0, 1249.0, 201, 300),
+        (1250.0, 2049.0, 301, 500),
+    ],
+    "so2": [
+        (0.0, 35.0, 0, 50),
+        (36.0, 75.0, 51, 100),
+        (76.0, 185.0, 101, 150),
+        (186.0, 304.0, 151, 200),
+        (305.0, 604.0, 201, 300),
+        (605.0, 1004.0, 301, 500),
+    ],
+    "co": [
+        (0.0, 5000.0, 0, 50),
+        (5001.0, 10000.0, 51, 100),
+        (10001.0, 15000.0, 101, 150),
+        (15001.0, 30000.0, 151, 200),
+        (30001.0, 50000.0, 201, 300),
+        (50001.0, 90000.0, 301, 500),
+    ],
+}
+
 AQI_LEVELS = {
     1: {
         "status": "Good",
@@ -183,15 +233,23 @@ class ModelStore:
             self.error = "Missing Python packages. Install backend/requirements.txt before running inference."
             return
 
+        errors = []
         try:
-            self.current_model = joblib.load(MODELS_DIR / "hcmc_rf_model.pkl")
-            self.current_scaler = joblib.load(MODELS_DIR / "hcmc_scaler.pkl")
+            current_model_path = MODELS_DIR / "hcmc_rf_model.pkl"
+            current_scaler_path = MODELS_DIR / "hcmc_scaler.pkl"
+            if current_model_path.exists() and current_scaler_path.exists():
+                self.current_model = joblib.load(current_model_path)
+                self.current_scaler = joblib.load(current_scaler_path)
+        except Exception as exc:
+            errors.append(f"Optional current model was not loaded: {exc}")
+
+        try:
             lstm_model_path = MODELS_DIR / "best_lstm_label_regression_model.keras"
             lstm_scaler_path = MODELS_DIR / "scaler_X.pkl"
             if lstm_model_path.exists() and lstm_scaler_path.exists():
                 self.future_scaler = joblib.load(lstm_scaler_path)
                 if load_model is None:
-                    self.error = "LSTM model files found, but TensorFlow/Keras is not installed."
+                    errors.append("LSTM model files found, but TensorFlow/Keras is not installed.")
                 else:
                     self.future_model = load_model(lstm_model_path, compile=False)
                     self.future_model_kind = "lstm"
@@ -203,11 +261,13 @@ class ModelStore:
                     self.future_scaler = joblib.load(future_scaler_path)
                     self.future_model_kind = "random_forest"
         except Exception as exc:
-            self.error = str(exc)
+            errors.append(str(exc))
+
+        self.error = " | ".join(errors)
 
     @property
     def current_ready(self) -> bool:
-        return self.current_model is not None and self.current_scaler is not None
+        return joblib is not None and pd is not None and np is not None
 
     @property
     def future_ready(self) -> bool:
@@ -235,7 +295,7 @@ MODELS = ModelStore()
 def model_info() -> dict[str, Any]:
     return {
         "project": "GreenAIr",
-        "current_model": "RandomForestClassifier for current AQI classification",
+        "current_model": "Fixed AQI sub-index formula for current air quality",
         "future_model": "Stacked LSTM regression model for next-hour AQI label forecasting",
         "current_features": CURRENT_FEATURES,
         "future_features": LSTM_FEATURES,
@@ -341,6 +401,48 @@ def coerce_label(raw_prediction: Any) -> int:
     return max(1, min(5, int(round(value))))
 
 
+def interpolate_aqi(value: float, breakpoints: list[tuple[float, float, int, int]]) -> int:
+    for conc_low, conc_high, index_low, index_high in breakpoints:
+        if conc_low <= value <= conc_high:
+            score = ((index_high - index_low) / (conc_high - conc_low)) * (value - conc_low) + index_low
+            return int(round(score))
+    if value < breakpoints[0][0]:
+        return breakpoints[0][2]
+    return breakpoints[-1][3]
+
+
+def label_from_aqi_score(score: int) -> int:
+    if score <= 50:
+        return 1
+    if score <= 100:
+        return 2
+    if score <= 150:
+        return 3
+    if score <= 200:
+        return 4
+    return 5
+
+
+def calculate_current_aqi(row: dict[str, float]) -> dict[str, Any]:
+    sub_indexes = [
+        {
+            "key": key,
+            "label": FEATURE_LABELS.get(key, key),
+            "value": row[key],
+            "score": interpolate_aqi(row[key], breakpoints),
+        }
+        for key, breakpoints in AQI_BREAKPOINTS.items()
+        if key in row
+    ]
+    primary = max(sub_indexes, key=lambda item: item["score"])
+    return {
+        "score": primary["score"],
+        "label": label_from_aqi_score(primary["score"]),
+        "primary_pollutant": primary["label"],
+        "sub_indexes": sub_indexes,
+    }
+
+
 def level_payload(label: int, kind: str) -> dict[str, Any]:
     details = AQI_LEVELS.get(label, AQI_LEVELS[5])
     return {
@@ -412,14 +514,16 @@ def audience_guidance(label: int) -> list[dict[str, Any]]:
 
 def predict_current(payload: dict[str, Any]) -> dict[str, Any]:
     if not MODELS.current_ready:
-        raise RuntimeError(MODELS.error or "Current AQI model is not ready.")
+        raise RuntimeError(MODELS.error or "Current AQI calculator is not ready.")
     row = build_current_row(payload)
-    input_df = pd.DataFrame([row], columns=CURRENT_FEATURES)
-    scaled = MODELS.current_scaler.transform(input_df)
-    label = int(MODELS.current_model.predict(scaled)[0])
+    formula = calculate_current_aqi(row)
+    label = formula["label"]
     result = level_payload(label, "current")
     result["features"] = row
-    result["explanations"] = explain_features(row, MODELS.current_model)
+    result["aqi_score"] = formula["score"]
+    result["primary_pollutant"] = formula["primary_pollutant"]
+    result["sub_indexes"] = formula["sub_indexes"]
+    result["explanations"] = explain_features(row)
     result["audience_guidance"] = audience_guidance(label)
     return result
 

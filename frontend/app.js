@@ -35,7 +35,7 @@ let mode = "current";
 let modelsReady = { current: false, future: false };
 let selectedStationIndex = 0;
 let autoLiveTimer = null;
-let areaComparisons = [];
+let stationForecast = [];
 
 const presets = {
   clear: {
@@ -178,13 +178,42 @@ function buildLiveSample(station) {
   return Object.fromEntries(Object.entries(base).map(([key, value]) => [key, jitterValue(value)]));
 }
 
+function projectSampleForHour(baseSample, station, hourOffset) {
+  const projected = { ...baseSample };
+  const trafficRise = station.scenario === "busy" || station.scenario === "alert";
+  const rainRelief = station.scenario === "rain";
+  const cleanerArea = station.scenario === "clear";
+  const drift = hourOffset - 1;
+
+  if (trafficRise) {
+    projected.pm2_5 = Number((projected.pm2_5 * (1 + drift * 0.035)).toFixed(1));
+    projected.pm10 = Number((projected.pm10 * (1 + drift * 0.03)).toFixed(1));
+    projected.co = Number((projected.co * (1 + drift * 0.025)).toFixed(1));
+    projected.no2 = Number((projected.no2 * (1 + drift * 0.025)).toFixed(1));
+  }
+
+  if (rainRelief) {
+    projected.pm2_5 = Number((projected.pm2_5 * Math.max(0.72, 1 - drift * 0.045)).toFixed(1));
+    projected.pm10 = Number((projected.pm10 * Math.max(0.74, 1 - drift * 0.04)).toFixed(1));
+    projected["humidity_%"] = Math.min(100, Number((projected["humidity_%"] + drift * 0.8).toFixed(1)));
+  }
+
+  if (cleanerArea) {
+    projected.pm2_5 = Number((projected.pm2_5 * Math.max(0.82, 1 - drift * 0.02)).toFixed(1));
+    projected.pm10 = Number((projected.pm10 * Math.max(0.84, 1 - drift * 0.018)).toFixed(1));
+  }
+
+  projected.wind_speed_kmh = Math.max(1, Number((projected.wind_speed_kmh + Math.sin(hourOffset) * 1.2).toFixed(1)));
+  return projected;
+}
+
 function selectStation(index) {
   selectedStationIndex = index;
   const station = liveStations[selectedStationIndex];
   stationName.textContent = station.name;
   stationScenario.textContent = station.label;
   stationNote.textContent = station.note;
-  areaComparisons = [];
+  stationForecast = [];
   renderAqiTrend();
   document.querySelectorAll(".station-button").forEach((button, buttonIndex) => {
     button.classList.toggle("active", buttonIndex === selectedStationIndex);
@@ -219,10 +248,10 @@ async function fetchLiveSample({ auto = false } = {}) {
   fillForm(sample);
   await runPrediction(sample);
   try {
-    await generateAreaComparison(sample);
+    await generateStationForecast(sample);
   } catch (error) {
-    areaComparisons = [];
-    trendSummary.textContent = "Comparison unavailable";
+    stationForecast = [];
+    trendSummary.textContent = "Forecast unavailable";
     aqiTrendChart.innerHTML = `<div class="chart-empty">${error.message}</div>`;
   }
 }
@@ -244,34 +273,36 @@ function toggleAutoLive() {
   }, 6000);
 }
 
-async function generateAreaComparison(selectedSample) {
-  const ready = mode === "future" ? modelsReady.future : modelsReady.current;
-  if (!ready) {
-    areaComparisons = [];
-    trendSummary.textContent = mode === "future" ? "Forecast model offline" : "Current model offline";
+async function generateStationForecast(baseSample) {
+  if (!modelsReady.future) {
+    stationForecast = [];
+    trendSummary.textContent = "Forecast model offline";
     renderAqiTrend();
     return;
   }
 
-  trendSummary.textContent = "Comparing...";
-  const modeLabel = mode === "future" ? "+1 hour" : "Current";
-  aqiTrendChart.innerHTML = `<div class="chart-empty">Running ${modeLabel.toLowerCase()} AQI comparison across prepared stations...</div>`;
+  const station = liveStations[selectedStationIndex];
+  const samples = [];
+  let historyRows = [latestFeatureHistory(baseSample), baseSample];
 
-  const samples = await Promise.all(
-    liveStations.map(async (station, index) => {
-      const features = index === selectedStationIndex ? selectedSample : buildLiveSample(station);
-      const result = await requestPrediction(features, mode);
-      return {
-        name: station.name,
-        label: result.aqi_label,
-        status: result.status,
-        tone: result.tone,
-        selected: index === selectedStationIndex,
-      };
-    })
-  );
+  trendSummary.textContent = "Forecasting...";
+  aqiTrendChart.innerHTML = `<div class="chart-empty">Generating LSTM forecast for ${station.name}...</div>`;
 
-  areaComparisons = samples;
+  for (let hour = 1; hour <= 6; hour += 1) {
+    const currentSample = projectSampleForHour(baseSample, station, hour);
+    const timestamp = new Date(Date.now() + (hour - 1) * 60 * 60 * 1000).toISOString();
+    const result = await requestFuturePrediction(currentSample, historyRows, timestamp);
+    samples.push({
+      label: result.aqi_label,
+      status: result.status,
+      tone: result.tone,
+      hourLabel: `+${hour}h`,
+      time: result.target_time ? formatTime(result.target_time) : `+${hour}h`,
+    });
+    historyRows = [historyRows[historyRows.length - 1], currentSample];
+  }
+
+  stationForecast = samples;
   renderAqiTrend();
 }
 
@@ -279,9 +310,10 @@ function setMode(nextMode) {
   mode = nextMode;
   currentMode.classList.toggle("active", mode === "current");
   futureMode.classList.toggle("active", mode === "future");
-  formModeLabel.textContent = mode === "current" ? "Current AQI classification" : "Next-hour forecast";
+  formModeLabel.textContent = mode === "current" ? "Current AQI formula" : "Next-hour LSTM forecast";
+  runButton.textContent = mode === "current" ? "Calculate" : "Run LSTM";
   runButton.disabled = mode === "current" ? !modelsReady.current : !modelsReady.future;
-  areaComparisons = [];
+  stationForecast = [];
   renderAqiTrend();
 }
 
@@ -300,7 +332,10 @@ function updateResult(result, submittedFeatures) {
   aqiNumber.textContent = result.aqi_label;
   resultKind.textContent = kind;
   resultTitle.textContent = `Level ${result.aqi_label} - ${result.status}`;
-  resultAdvice.textContent = result.advice;
+  resultAdvice.textContent =
+    result.kind === "current" && result.primary_pollutant
+      ? `${result.advice} Main driver: ${result.primary_pollutant}. Calculated AQI score: ${result.aqi_score}.`
+      : result.advice;
   targetTime.textContent = time;
   resultBand.className = `result-band ${toneClass(result.tone)}`;
   renderExplanations(result.explanations || []);
@@ -369,7 +404,7 @@ function renderGuidance(groups) {
 function renderModelInfo(info) {
   modelInfo.innerHTML = `
     <div class="model-stat">
-      <span>Current model</span>
+      <span>Current AQI</span>
       <strong>${info.current_model}</strong>
     </div>
     <div class="model-stat">
@@ -445,46 +480,51 @@ function renderHistory() {
 }
 
 function renderAqiTrend() {
-  const samples = areaComparisons;
+  const samples = stationForecast;
   const station = liveStations[selectedStationIndex];
   if (!samples.length) {
-    trendSummary.textContent = "Comparison: not loaded";
+    trendSummary.textContent = "Forecast: not loaded";
     aqiTrendChart.innerHTML = `
       <div class="chart-empty">
-        Load a station sample to compare ${mode === "future" ? "+1 hour forecast" : "current AQI"} levels across prepared HCMC areas.
+        Load a station sample to generate the next 6 hourly AQI levels for ${station.name}.
       </div>
     `;
     return;
   }
 
-  const highest = samples.reduce((top, item) => (item.label > top.label ? item : top), samples[0]);
-  const lowest = samples.reduce((low, item) => (item.label < low.label ? item : low), samples[0]);
-  const spread = highest.label - lowest.label;
+  const first = samples[0].label;
+  const last = samples[samples.length - 1].label;
+  const delta = last - first;
   const width = 760;
-  const height = 270;
-  const pad = { top: 34, right: 28, bottom: 62, left: 58 };
+  const height = 260;
+  const pad = { top: 30, right: 26, bottom: 46, left: 50 };
   const plotWidth = width - pad.left - pad.right;
   const plotHeight = height - pad.top - pad.bottom;
-  const barGap = 28;
-  const barWidth = (plotWidth - barGap * (samples.length - 1)) / samples.length;
-  const xFor = (index) => pad.left + index * (barWidth + barGap);
+  const xFor = (index) => pad.left + (samples.length === 1 ? plotWidth / 2 : (index / (samples.length - 1)) * plotWidth);
   const yFor = (level) => pad.top + ((5 - level) / 4) * plotHeight;
+  const points = samples.map((sample, index) => `${xFor(index)},${yFor(sample.label)}`).join(" ");
+  const areaPoints = `${pad.left},${pad.top + plotHeight} ${points} ${pad.left + plotWidth},${pad.top + plotHeight}`;
 
   trendSummary.textContent =
-    spread === 0 ? "Same AQI level" : `${highest.name.split(",")[0]} highest`;
+    delta > 0
+      ? `Forecast up ${delta} level${delta > 1 ? "s" : ""}`
+      : delta < 0
+        ? `Forecast down ${Math.abs(delta)} level${Math.abs(delta) > 1 ? "s" : ""}`
+        : "Forecast stable";
   aqiTrendChart.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="AQI level comparison across prepared HCMC monitoring areas">
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="LSTM AQI forecast for selected station">
       <defs>
-        <linearGradient id="aqiBarGradient" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="#7ad89f" />
-          <stop offset="55%" stop-color="#2fad73" />
-          <stop offset="100%" stop-color="#1f8256" />
+        <linearGradient id="aqiLineGradient" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stop-color="#35e6a6" />
+          <stop offset="55%" stop-color="#d9ba57" />
+          <stop offset="100%" stop-color="#c8564f" />
         </linearGradient>
-        <filter id="barShadow" x="-20%" y="-20%" width="140%" height="150%">
-          <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#1d4f37" flood-opacity="0.18" />
-        </filter>
-        <filter id="selectedGlow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+        <linearGradient id="aqiAreaGradient" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#35e6a6" stop-opacity="0.24" />
+          <stop offset="100%" stop-color="#35e6a6" stop-opacity="0.02" />
+        </linearGradient>
+        <filter id="aqiGlow">
+          <feGaussianBlur stdDeviation="3" result="coloredBlur" />
           <feMerge>
             <feMergeNode in="coloredBlur" />
             <feMergeNode in="SourceGraphic" />
@@ -500,25 +540,19 @@ function renderAqiTrend() {
           `;
         })
         .join("")}
-      <text class="chart-axis-caption" x="${pad.left}" y="20">${mode === "future" ? "Predicted +1 hour AQI level" : "Current AQI level"}</text>
+      <text class="chart-axis-caption" x="${pad.left}" y="20">Predicted AQI level - ${station.name}</text>
+      <polygon class="chart-area" points="${areaPoints}" />
+      <polyline class="chart-line" points="${points}" filter="url(#aqiGlow)" />
       ${samples
         .map((sample, index) => {
           const x = xFor(index);
           const y = yFor(sample.label);
-          const baseline = pad.top + plotHeight;
-          const barHeight = baseline - y;
-          const label = sample.name.replace(", ", "\n");
           return `
-            <g class="area-bar-group ${sample.selected ? "is-selected" : ""}">
-              <rect class="area-bar ${toneClass(sample.tone)}" x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="8" filter="${sample.selected ? "url(#selectedGlow)" : "url(#barShadow)"}"></rect>
-              <text class="area-bar-value" x="${x + barWidth / 2}" y="${Math.max(24, y - 10)}">${sample.label}</text>
-              <text class="area-bar-label" x="${x + barWidth / 2}" y="${height - 34}">
-                ${label
-                  .split("\n")
-                  .map((part, partIndex) => `<tspan x="${x + barWidth / 2}" dy="${partIndex === 0 ? 0 : 14}">${part}</tspan>`)
-                  .join("")}
-              </text>
-              ${sample.selected ? `<text class="area-selected-label" x="${x + barWidth / 2}" y="${height - 8}">Selected</text>` : ""}
+            <g class="chart-point-group">
+              <circle class="chart-point-halo" cx="${x}" cy="${y}" r="13"></circle>
+              <circle class="chart-point ${toneClass(sample.tone)}" cx="${x}" cy="${y}" r="7"></circle>
+              <text class="chart-point-value" x="${x}" y="${Math.max(18, y - 17)}">${sample.label}</text>
+              <text class="chart-point-label" x="${x}" y="${height - 16}">${sample.hourLabel}</text>
             </g>
           `;
         })
@@ -539,7 +573,7 @@ function renderScenarioComparison() {
     comparisonSummary.textContent = "Run at least 2 scenarios";
     comparisonGrid.innerHTML = `
       <div class="chart-empty comparison-empty">
-        Run different presets or edit inputs, then click Run AI to compare scenarios here.
+        Run different presets or edit inputs, then calculate scenarios here.
       </div>
     `;
     return;
@@ -638,7 +672,7 @@ async function runPrediction(values) {
     targetTime.textContent = "--";
   } finally {
     form.classList.remove("is-loading");
-    runButton.textContent = "Run AI";
+    runButton.textContent = mode === "current" ? "Calculate" : "Run LSTM";
   }
 }
 
@@ -656,6 +690,17 @@ async function requestPrediction(values, predictionMode) {
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "Prediction failed");
+  return result;
+}
+
+async function requestFuturePrediction(values, historyRows, timestamp) {
+  const response = await fetch("/api/predict/future", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ current: values, history: historyRows, timestamp }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Forecast failed");
   return result;
 }
 

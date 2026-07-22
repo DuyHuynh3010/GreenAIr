@@ -26,7 +26,7 @@
 
         <section class="status-panel" aria-live="polite">
           <div class="status-row">
-            <span>Current AQI model</span>
+            <span>Current AQI formula</span>
             <strong id="currentModelState">Checking</strong>
           </div>
           <div class="status-row">
@@ -86,12 +86,12 @@
         <section class="trend-panel">
           <div class="panel-heading">
             <div>
-              <p class="panel-title">Area AQI Comparison</p>
-              <span>Compare prepared monitoring points in the selected prediction mode</span>
+              <p class="panel-title">Station AQI Forecast</p>
+              <span>LSTM rolling forecast for the selected monitoring point</span>
             </div>
             <strong id="trendSummary">Choose a station</strong>
           </div>
-          <div id="aqiTrendChart" class="aqi-chart" aria-label="AQI level comparison chart by area"></div>
+          <div id="aqiTrendChart" class="aqi-chart" aria-label="Selected station next-hours AQI forecast chart"></div>
         </section>
 
         <section class="comparison-panel">
@@ -145,7 +145,7 @@
                 <p class="panel-title">Model Inputs</p>
                 <span id="formModeLabel">Current AQI classification</span>
               </div>
-              <button id="runButton" class="primary-button" type="submit">Run AI</button>
+              <button id="runButton" class="primary-button" type="submit">Calculate</button>
             </div>
 
             <div class="input-grid">

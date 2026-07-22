@@ -588,6 +588,7 @@ h3 {
 .chart-axis-label,
 .chart-axis-caption,
 .chart-point-label,
+.chart-point-value,
 .area-bar-label,
 .area-bar-value,
 .area-selected-label {
@@ -615,6 +616,13 @@ h3 {
 .chart-point {
   stroke: rgba(255, 255, 255, 0.62);
   stroke-width: 2;
+}
+
+.chart-point-value {
+  fill: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  text-anchor: middle;
 }
 
 .area-bar {
