@@ -35,6 +35,7 @@ let mode = "current";
 let modelsReady = { current: false, future: false };
 let selectedStationIndex = 0;
 let autoLiveTimer = null;
+let stationForecast = [];
 
 const presets = {
   clear: {
@@ -177,12 +178,43 @@ function buildLiveSample(station) {
   return Object.fromEntries(Object.entries(base).map(([key, value]) => [key, jitterValue(value)]));
 }
 
+function projectSampleForHour(baseSample, station, hourOffset) {
+  const projected = { ...baseSample };
+  const trafficRise = station.scenario === "busy" || station.scenario === "alert";
+  const rainRelief = station.scenario === "rain";
+  const cleanerArea = station.scenario === "clear";
+  const drift = hourOffset - 1;
+
+  if (trafficRise) {
+    projected.pm2_5 = Number((projected.pm2_5 * (1 + drift * 0.035)).toFixed(1));
+    projected.pm10 = Number((projected.pm10 * (1 + drift * 0.03)).toFixed(1));
+    projected.co = Number((projected.co * (1 + drift * 0.025)).toFixed(1));
+    projected.no2 = Number((projected.no2 * (1 + drift * 0.025)).toFixed(1));
+  }
+
+  if (rainRelief) {
+    projected.pm2_5 = Number((projected.pm2_5 * Math.max(0.72, 1 - drift * 0.045)).toFixed(1));
+    projected.pm10 = Number((projected.pm10 * Math.max(0.74, 1 - drift * 0.04)).toFixed(1));
+    projected["humidity_%"] = Math.min(100, Number((projected["humidity_%"] + drift * 0.8).toFixed(1)));
+  }
+
+  if (cleanerArea) {
+    projected.pm2_5 = Number((projected.pm2_5 * Math.max(0.82, 1 - drift * 0.02)).toFixed(1));
+    projected.pm10 = Number((projected.pm10 * Math.max(0.84, 1 - drift * 0.018)).toFixed(1));
+  }
+
+  projected.wind_speed_kmh = Math.max(1, Number((projected.wind_speed_kmh + Math.sin(hourOffset) * 1.2).toFixed(1)));
+  return projected;
+}
+
 function selectStation(index) {
   selectedStationIndex = index;
   const station = liveStations[selectedStationIndex];
   stationName.textContent = station.name;
   stationScenario.textContent = station.label;
   stationNote.textContent = station.note;
+  stationForecast = [];
+  renderAqiTrend();
   document.querySelectorAll(".station-button").forEach((button, buttonIndex) => {
     button.classList.toggle("active", buttonIndex === selectedStationIndex);
   });
@@ -202,7 +234,8 @@ function renderStationSelector() {
 }
 
 async function fetchLiveSample({ auto = false } = {}) {
-  if (!modelsReady.current) {
+  const ready = mode === "future" ? modelsReady.future : modelsReady.current;
+  if (!ready) {
     liveStatus.textContent = "Model offline";
     return;
   }
@@ -211,10 +244,16 @@ async function fetchLiveSample({ auto = false } = {}) {
   const sample = buildLiveSample(station);
 
   liveTimestamp.textContent = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  liveStatus.textContent = auto ? "Auto cycling" : "Sample loaded";
+  liveStatus.textContent = auto ? `Auto cycling (${mode})` : `Sample loaded (${mode})`;
   fillForm(sample);
-  setMode("current");
   await runPrediction(sample);
+  try {
+    await generateStationForecast(sample);
+  } catch (error) {
+    stationForecast = [];
+    trendSummary.textContent = "Forecast unavailable";
+    aqiTrendChart.innerHTML = `<div class="chart-empty">${error.message}</div>`;
+  }
 }
 
 function toggleAutoLive() {
@@ -232,6 +271,46 @@ function toggleAutoLive() {
     selectStation((selectedStationIndex + 1) % liveStations.length);
     fetchLiveSample({ auto: true });
   }, 6000);
+}
+
+async function generateStationForecast(baseSample) {
+  if (!modelsReady.future) {
+    stationForecast = [];
+    trendSummary.textContent = "Forecast model offline";
+    renderAqiTrend();
+    return;
+  }
+
+  const station = liveStations[selectedStationIndex];
+  const now = new Date();
+  const samples = [];
+  let previousSample = latestFeatureHistory(baseSample);
+
+  trendSummary.textContent = "Forecasting...";
+  aqiTrendChart.innerHTML = `<div class="chart-empty">Generating next-hour forecast for ${station.name}...</div>`;
+
+  for (let hour = 1; hour <= 6; hour += 1) {
+    const currentSample = projectSampleForHour(baseSample, station, hour);
+    const timestamp = new Date(now.getTime() + (hour - 1) * 60 * 60 * 1000).toISOString();
+    const response = await fetch("/api/predict/future", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current: currentSample, history: previousSample, timestamp }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Forecast failed");
+    samples.push({
+      label: result.aqi_label,
+      status: result.status,
+      tone: result.tone,
+      hourLabel: `+${hour}h`,
+      time: new Date(result.target_time).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+    });
+    previousSample = currentSample;
+  }
+
+  stationForecast = samples;
+  renderAqiTrend();
 }
 
 function setMode(nextMode) {
@@ -367,7 +446,6 @@ function saveHistory(result, submittedFeatures) {
   ].slice(0, 8);
   localStorage.setItem("greenair-history", JSON.stringify(next));
   renderHistory();
-  renderAqiTrend();
   renderScenarioComparison();
 }
 
@@ -403,22 +481,23 @@ function renderHistory() {
 }
 
 function trendDirection(samples) {
-  if (samples.length < 2) return "Trend: collecting";
+  if (samples.length < 2) return "Forecast: collecting";
   const first = samples[0].label;
   const last = samples[samples.length - 1].label;
   const delta = last - first;
-  if (delta > 0) return `Trend: up ${delta} level${delta > 1 ? "s" : ""}`;
-  if (delta < 0) return `Trend: down ${Math.abs(delta)} level${Math.abs(delta) > 1 ? "s" : ""}`;
-  return "Trend: stable";
+  if (delta > 0) return `Forecast: up ${delta} level${delta > 1 ? "s" : ""}`;
+  if (delta < 0) return `Forecast: down ${Math.abs(delta)} level${Math.abs(delta) > 1 ? "s" : ""}`;
+  return "Forecast: stable";
 }
 
 function renderAqiTrend() {
-  const samples = [...history()].reverse();
+  const samples = stationForecast;
+  const station = liveStations[selectedStationIndex];
   if (!samples.length) {
-    trendSummary.textContent = "Trend: no samples";
+    trendSummary.textContent = "Forecast: not loaded";
     aqiTrendChart.innerHTML = `
       <div class="chart-empty">
-        Run a few scenarios to see how AQI level changes as inputs change.
+        Load a station sample to generate the next 6 hourly AQI predictions for ${station.name}.
       </div>
     `;
     return;
@@ -436,7 +515,7 @@ function renderAqiTrend() {
 
   trendSummary.textContent = trendDirection(samples);
   aqiTrendChart.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="AQI level movement from prediction history">
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Next-hour AQI forecast for selected station">
       <defs>
         <linearGradient id="aqiLineGradient" x1="0" x2="1" y1="0" y2="0">
           <stop offset="0%" stop-color="#35e6a6" />
@@ -475,7 +554,7 @@ function renderAqiTrend() {
             <g class="chart-point-group">
               <circle class="chart-point-halo" cx="${x}" cy="${y}" r="13"></circle>
               <circle class="chart-point ${toneClass(sample.tone)}" cx="${x}" cy="${y}" r="7"></circle>
-              <text class="chart-point-label" x="${x}" y="${height - 14}">${index + 1}</text>
+              <text class="chart-point-label" x="${x}" y="${height - 14}">${sample.hourLabel}</text>
             </g>
           `;
         })
@@ -622,7 +701,6 @@ form.addEventListener("input", () => renderBars(getFormData()));
 clearHistory.addEventListener("click", () => {
   localStorage.removeItem("greenair-history");
   renderHistory();
-  renderAqiTrend();
   renderScenarioComparison();
 });
 fetchLiveButton.addEventListener("click", () => fetchLiveSample());
