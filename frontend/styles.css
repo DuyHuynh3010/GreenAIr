@@ -587,7 +587,10 @@ h3 {
 
 .chart-axis-label,
 .chart-axis-caption,
-.chart-point-label {
+.chart-point-label,
+.area-bar-label,
+.area-bar-value,
+.area-selected-label {
   fill: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -612,6 +615,56 @@ h3 {
 .chart-point {
   stroke: rgba(255, 255, 255, 0.62);
   stroke-width: 2;
+}
+
+.area-bar {
+  stroke: rgba(255, 255, 255, 0.54);
+  stroke-width: 1.5;
+}
+
+.area-bar.tone-good {
+  fill: #2fad73;
+}
+
+.area-bar.tone-moderate {
+  fill: #d9ba57;
+}
+
+.area-bar.tone-unhealthy-sensitive {
+  fill: #d8834b;
+}
+
+.area-bar.tone-unhealthy {
+  fill: #c8564f;
+}
+
+.area-bar.tone-hazardous {
+  fill: #74405a;
+}
+
+.area-bar-group.is-selected .area-bar {
+  stroke: #14382d;
+  stroke-width: 2.5;
+}
+
+.area-bar-value {
+  fill: var(--ink);
+  font-size: 18px;
+  font-weight: 900;
+  text-anchor: middle;
+}
+
+.area-bar-label {
+  fill: var(--ink);
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.area-selected-label {
+  fill: var(--accent-dark);
+  font-size: 10px;
+  text-anchor: middle;
+  text-transform: uppercase;
 }
 
 .comparison-grid {
