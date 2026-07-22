@@ -86,46 +86,46 @@ AQI_LEVELS = {
     1: {
         "status": "Good",
         "tone": "good",
-        "advice": "Air quality is stable. Outdoor activity is generally fine.",
+        "advice": "Air quality looks good right now. It is a comfortable time for normal outdoor activities.",
     },
     2: {
         "status": "Moderate",
         "tone": "moderate",
-        "advice": "Air quality is acceptable. Sensitive people should watch symptoms during long outdoor activity.",
+        "advice": "Air quality is still acceptable. Most people can continue as usual, while sensitive groups may want to take it a little easier outdoors.",
     },
     3: {
         "status": "Unhealthy for Sensitive Groups",
         "tone": "unhealthy-sensitive",
-        "advice": "Sensitive groups should reduce prolonged outdoor exposure and consider a mask near traffic.",
+        "advice": "Air quality may start to affect sensitive groups. Consider shortening outdoor activities and wearing a mask in busy traffic areas.",
     },
     4: {
         "status": "Unhealthy",
         "tone": "unhealthy",
-        "advice": "Limit outdoor activity. Children, older adults, and people with respiratory conditions should stay indoors where possible.",
+        "advice": "Air quality is unhealthy. It is better to reduce outdoor time, avoid intense exercise, and keep children, older adults, and respiratory-risk groups in cleaner indoor spaces when possible.",
     },
     5: {
         "status": "Very Unhealthy / Hazardous",
         "tone": "hazardous",
-        "advice": "Health alert. Stay indoors, close windows, and use air filtration if available.",
+        "advice": "This is a high-risk air quality condition. Stay indoors if you can, close windows, and use air filtration or a protective mask when going outside is unavoidable.",
     },
 }
 
 AUDIENCE_GUIDANCE = {
     "children": [
-        "Prefer indoor play when AQI reaches level 3 or higher.",
-        "Avoid heavy outdoor exercise near traffic corridors.",
+        "Choose indoor activities when air quality becomes unhealthy.",
+        "Keep outdoor play short near heavy traffic routes.",
     ],
     "older_adults": [
-        "Keep outdoor trips short during unhealthy air periods.",
-        "Monitor breathing, dizziness, or chest discomfort.",
+        "Keep outdoor trips short and take breaks when needed.",
+        "Pay attention to breathing comfort, dizziness, or chest discomfort.",
     ],
     "respiratory": [
-        "Carry medication or inhaler if prescribed.",
-        "Use a well-fitted mask and avoid peak traffic hours.",
+        "Keep prescribed medication or an inhaler nearby.",
+        "Use a well-fitted mask and avoid peak traffic periods when possible.",
     ],
     "commuters": [
-        "Choose less congested routes when possible.",
-        "Use a mask during high PM2.5 or PM10 conditions.",
+        "Pick less congested routes if your schedule allows.",
+        "Consider a mask when PM2.5 or PM10 levels are elevated.",
     ],
 }
 

@@ -27,10 +27,13 @@ const liveTimestamp = document.querySelector("#liveTimestamp");
 const stationName = document.querySelector("#stationName");
 const fetchLiveButton = document.querySelector("#fetchLiveButton");
 const autoLiveButton = document.querySelector("#autoLiveButton");
+const stationSelector = document.querySelector("#stationSelector");
+const stationScenario = document.querySelector("#stationScenario");
+const stationNote = document.querySelector("#stationNote");
 
 let mode = "current";
 let modelsReady = { current: false, future: false };
-let liveCursor = 0;
+let selectedStationIndex = 0;
 let autoLiveTimer = null;
 
 const presets = {
@@ -94,24 +97,28 @@ const presets = {
 
 const liveStations = [
   {
-    name: "District 1 urban station",
+    name: "Ben Thanh, District 1",
     scenario: "busy",
-    note: "Rush-hour traffic corridor",
+    label: "Traffic center",
+    note: "A downtown traffic-heavy sample for rush-hour conditions.",
   },
   {
-    name: "Thu Duc riverside station",
+    name: "Saigon Hi-Tech Park, Thu Duc",
     scenario: "clear",
-    note: "Cleaner morning air sample",
+    label: "Open urban area",
+    note: "A cleaner morning sample from a more open urban area.",
   },
   {
-    name: "Binh Thanh residential station",
+    name: "Binh Thanh residential area",
     scenario: "rain",
-    note: "After-rain humidity sample",
+    label: "After rain",
+    note: "A humid after-rain sample where particles are lower but humidity is high.",
   },
   {
     name: "Tan Binh airport corridor",
     scenario: "alert",
-    note: "High-pollution alert sample",
+    label: "Pollution alert",
+    note: "A high-risk sample representing dense traffic near the airport corridor.",
   },
 ];
 
@@ -170,19 +177,41 @@ function buildLiveSample(station) {
   return Object.fromEntries(Object.entries(base).map(([key, value]) => [key, jitterValue(value)]));
 }
 
+function selectStation(index) {
+  selectedStationIndex = index;
+  const station = liveStations[selectedStationIndex];
+  stationName.textContent = station.name;
+  stationScenario.textContent = station.label;
+  stationNote.textContent = station.note;
+  document.querySelectorAll(".station-button").forEach((button, buttonIndex) => {
+    button.classList.toggle("active", buttonIndex === selectedStationIndex);
+  });
+}
+
+function renderStationSelector() {
+  stationSelector.innerHTML = "";
+  liveStations.forEach((station, index) => {
+    const button = document.createElement("button");
+    button.className = "station-button";
+    button.type = "button";
+    button.innerHTML = `<strong>${station.name}</strong><span>${station.label}</span>`;
+    button.addEventListener("click", () => selectStation(index));
+    stationSelector.appendChild(button);
+  });
+  selectStation(selectedStationIndex);
+}
+
 async function fetchLiveSample({ auto = false } = {}) {
   if (!modelsReady.current) {
     liveStatus.textContent = "Model offline";
     return;
   }
 
-  const station = liveStations[liveCursor % liveStations.length];
-  liveCursor += 1;
+  const station = liveStations[selectedStationIndex];
   const sample = buildLiveSample(station);
 
-  stationName.textContent = station.name;
   liveTimestamp.textContent = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  liveStatus.textContent = auto ? "Auto live feed" : "Live sample loaded";
+  liveStatus.textContent = auto ? "Auto cycling" : "Sample loaded";
   fillForm(sample);
   setMode("current");
   await runPrediction(sample);
@@ -192,14 +221,17 @@ function toggleAutoLive() {
   if (autoLiveTimer) {
     clearInterval(autoLiveTimer);
     autoLiveTimer = null;
-    autoLiveButton.textContent = "Auto live: off";
+    autoLiveButton.textContent = "Auto cycle: off";
     liveStatus.textContent = "Manual mode";
     return;
   }
 
-  autoLiveButton.textContent = "Auto live: on";
+  autoLiveButton.textContent = "Auto cycle: on";
   fetchLiveSample({ auto: true });
-  autoLiveTimer = setInterval(() => fetchLiveSample({ auto: true }), 6000);
+  autoLiveTimer = setInterval(() => {
+    selectStation((selectedStationIndex + 1) % liveStations.length);
+    fetchLiveSample({ auto: true });
+  }, 6000);
 }
 
 function setMode(nextMode) {
@@ -597,6 +629,7 @@ fetchLiveButton.addEventListener("click", () => fetchLiveSample());
 autoLiveButton.addEventListener("click", toggleAutoLive);
 
 fillForm(presets.busy);
+renderStationSelector();
 renderHistory();
 renderAqiTrend();
 renderScenarioComparison();

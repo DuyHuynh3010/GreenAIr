@@ -108,8 +108,8 @@
         <section class="live-panel">
           <div class="panel-heading">
             <div>
-              <p class="panel-title">Live Data Demo</p>
-              <span>Simulated realtime station feed for presentation mode</span>
+              <p class="panel-title">Realtime Data Demo</p>
+              <span>Choose a monitoring point, then load a prepared live-style sample</span>
             </div>
             <strong id="liveStatus">Manual mode</strong>
           </div>
@@ -122,18 +122,20 @@
               </div>
             </div>
             <div class="live-meta">
-              <span>Last sync</span>
+              <span>Sample time</span>
               <strong id="liveTimestamp">Not synced</strong>
             </div>
             <div class="live-meta">
-              <span>Source</span>
-              <strong>Demo realtime feed</strong>
+              <span>Scenario</span>
+              <strong id="stationScenario">Manual input</strong>
             </div>
             <div class="live-actions">
-              <button id="fetchLiveButton" class="secondary-button" type="button">Fetch live sample</button>
-              <button id="autoLiveButton" class="secondary-button" type="button">Auto live: off</button>
+              <button id="fetchLiveButton" class="secondary-button" type="button">Load station sample</button>
+              <button id="autoLiveButton" class="secondary-button" type="button">Auto cycle: off</button>
             </div>
           </div>
+          <div id="stationSelector" class="station-selector" aria-label="Realtime demo stations"></div>
+          <p id="stationNote" class="station-note">Prepared sample data will be used to simulate a realtime sensor update.</p>
         </section>
 
         <section class="content-grid">
