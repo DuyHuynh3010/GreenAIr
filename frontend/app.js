@@ -178,33 +178,16 @@ function buildLiveSample(station) {
   return Object.fromEntries(Object.entries(base).map(([key, value]) => [key, jitterValue(value)]));
 }
 
-function projectSampleForHour(baseSample, station, hourOffset) {
-  const projected = { ...baseSample };
-  const trafficRise = station.scenario === "busy" || station.scenario === "alert";
-  const rainRelief = station.scenario === "rain";
-  const cleanerArea = station.scenario === "clear";
-  const drift = hourOffset - 1;
-
-  if (trafficRise) {
-    projected.pm2_5 = Number((projected.pm2_5 * (1 + drift * 0.035)).toFixed(1));
-    projected.pm10 = Number((projected.pm10 * (1 + drift * 0.03)).toFixed(1));
-    projected.co = Number((projected.co * (1 + drift * 0.025)).toFixed(1));
-    projected.no2 = Number((projected.no2 * (1 + drift * 0.025)).toFixed(1));
-  }
-
-  if (rainRelief) {
-    projected.pm2_5 = Number((projected.pm2_5 * Math.max(0.72, 1 - drift * 0.045)).toFixed(1));
-    projected.pm10 = Number((projected.pm10 * Math.max(0.74, 1 - drift * 0.04)).toFixed(1));
-    projected["humidity_%"] = Math.min(100, Number((projected["humidity_%"] + drift * 0.8).toFixed(1)));
-  }
-
-  if (cleanerArea) {
-    projected.pm2_5 = Number((projected.pm2_5 * Math.max(0.82, 1 - drift * 0.02)).toFixed(1));
-    projected.pm10 = Number((projected.pm10 * Math.max(0.84, 1 - drift * 0.018)).toFixed(1));
-  }
-
-  projected.wind_speed_kmh = Math.max(1, Number((projected.wind_speed_kmh + Math.sin(hourOffset) * 1.2).toFixed(1)));
-  return projected;
+function buildPastSample(currentSample, fallbackHistory, ageHours) {
+  const factor = Math.max(0.72, 1 - ageHours * 0.08);
+  return Object.fromEntries(
+    Object.keys(barLimits).map((key) => {
+      const sourceValue = Number(fallbackHistory?.[key]);
+      const currentValue = Number(currentSample[key] || 0);
+      const value = Number.isFinite(sourceValue) ? sourceValue : currentValue * factor;
+      return [key, Math.max(0, Number(value.toFixed(1)))];
+    })
+  );
 }
 
 function selectStation(index) {
@@ -282,27 +265,42 @@ async function generateStationForecast(baseSample) {
   }
 
   const station = liveStations[selectedStationIndex];
-  const samples = [];
-  let historyRows = [latestFeatureHistory(baseSample), baseSample];
+  const previous1 = buildPastSample(baseSample, latestFeatureHistory(baseSample), 1);
+  const previous2 = buildPastSample(previous1, null, 1);
+  const now = new Date();
 
   trendSummary.textContent = "Forecasting...";
-  aqiTrendChart.innerHTML = `<div class="chart-empty">Generating LSTM forecast for ${station.name}...</div>`;
+  aqiTrendChart.innerHTML = `<div class="chart-empty">Generating 3-hour LSTM forecast for ${station.name}...</div>`;
 
-  for (let hour = 1; hour <= 6; hour += 1) {
-    const currentSample = projectSampleForHour(baseSample, station, hour);
-    const timestamp = new Date(Date.now() + (hour - 1) * 60 * 60 * 1000).toISOString();
-    const result = await requestFuturePrediction(currentSample, historyRows, timestamp);
-    samples.push({
-      label: result.aqi_label,
-      status: result.status,
-      tone: result.tone,
-      hourLabel: `+${hour}h`,
-      time: result.target_time ? formatTime(result.target_time) : `+${hour}h`,
-    });
-    historyRows = [historyRows[historyRows.length - 1], currentSample];
-  }
+  const pastAndNow = await Promise.all(
+    [
+      { sample: previous2, hourLabel: "-2h", offset: -2 },
+      { sample: previous1, hourLabel: "-1h", offset: -1 },
+      { sample: baseSample, hourLabel: "Now", offset: 0 },
+    ].map(async (point) => {
+      const result = await requestPrediction(point.sample, "current");
+      return {
+        label: result.aqi_label,
+        status: result.status,
+        tone: result.tone,
+        hourLabel: point.hourLabel,
+        time: new Date(now.getTime() + point.offset * 60 * 60 * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+        observed: true,
+      };
+    })
+  );
 
-  stationForecast = samples;
+  const futureResult = await requestFuturePrediction(baseSample, [previous2, previous1], now.toISOString());
+  const futurePoints = (futureResult.forecast_points || [futureResult]).slice(0, 3).map((point, index) => ({
+    label: point.aqi_label,
+    status: point.status,
+    tone: point.tone,
+    hourLabel: `+${index + 1}h`,
+    time: point.target_time ? formatTime(point.target_time) : `+${index + 1}h`,
+    observed: false,
+  }));
+
+  stationForecast = [...pastAndNow, ...futurePoints];
   renderAqiTrend();
 }
 
@@ -486,15 +484,15 @@ function renderAqiTrend() {
     trendSummary.textContent = "Forecast: not loaded";
     aqiTrendChart.innerHTML = `
       <div class="chart-empty">
-        Load a station sample to generate the next 6 hourly AQI levels for ${station.name}.
+        Load a station sample to generate the 6-point AQI timeline for ${station.name}.
       </div>
     `;
     return;
   }
 
-  const first = samples[0].label;
+  const currentPoint = samples.find((sample) => sample.hourLabel === "Now") || samples[0];
   const last = samples[samples.length - 1].label;
-  const delta = last - first;
+  const delta = last - currentPoint.label;
   const width = 760;
   const height = 260;
   const pad = { top: 30, right: 26, bottom: 46, left: 50 };
@@ -507,9 +505,9 @@ function renderAqiTrend() {
 
   trendSummary.textContent =
     delta > 0
-      ? `Forecast up ${delta} level${delta > 1 ? "s" : ""}`
+      ? `+3h up ${delta} level${delta > 1 ? "s" : ""}`
       : delta < 0
-        ? `Forecast down ${Math.abs(delta)} level${Math.abs(delta) > 1 ? "s" : ""}`
+        ? `+3h down ${Math.abs(delta)} level${Math.abs(delta) > 1 ? "s" : ""}`
         : "Forecast stable";
   aqiTrendChart.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="LSTM AQI forecast for selected station">
@@ -548,7 +546,7 @@ function renderAqiTrend() {
           const x = xFor(index);
           const y = yFor(sample.label);
           return `
-            <g class="chart-point-group">
+            <g class="chart-point-group ${sample.observed ? "is-observed" : "is-forecast"}">
               <circle class="chart-point-halo" cx="${x}" cy="${y}" r="13"></circle>
               <circle class="chart-point ${toneClass(sample.tone)}" cx="${x}" cy="${y}" r="7"></circle>
               <text class="chart-point-value" x="${x}" y="${Math.max(18, y - 17)}">${sample.label}</text>

@@ -244,8 +244,12 @@ class ModelStore:
             errors.append(f"Optional current model was not loaded: {exc}")
 
         try:
-            lstm_model_path = MODELS_DIR / "best_lstm_label_regression_model.keras"
-            lstm_scaler_path = MODELS_DIR / "scaler_X.pkl"
+            lstm_model_path = MODELS_DIR / "best_lstm_regression_model.h5"
+            lstm_scaler_path = MODELS_DIR / "scaler_x.pkl"
+            if not lstm_model_path.exists():
+                lstm_model_path = MODELS_DIR / "best_lstm_label_regression_model.keras"
+            if not lstm_scaler_path.exists():
+                lstm_scaler_path = MODELS_DIR / "scaler_X.pkl"
             if lstm_model_path.exists() and lstm_scaler_path.exists():
                 self.future_scaler = joblib.load(lstm_scaler_path)
                 if load_model is None:
@@ -296,7 +300,7 @@ def model_info() -> dict[str, Any]:
     return {
         "project": "GreenAIr",
         "current_model": "Fixed AQI sub-index formula for current air quality",
-        "future_model": "Stacked LSTM regression model for next-hour AQI label forecasting",
+        "future_model": "Stacked LSTM regression model for 3-hour AQI label forecasting",
         "current_features": CURRENT_FEATURES,
         "future_features": LSTM_FEATURES,
         "output": "AQI risk level from 1 to 5",
@@ -399,6 +403,11 @@ def coerce_label(raw_prediction: Any) -> int:
     if 0.0 <= value <= 1.0:
         value = 1.0 + value * 4.0
     return max(1, min(5, int(round(value))))
+
+
+def coerce_labels(raw_prediction: Any) -> list[int]:
+    values = np.asarray(raw_prediction).reshape(-1)
+    return [coerce_label(value) for value in values]
 
 
 def interpolate_aqi(value: float, breakpoints: list[tuple[float, float, int, int]]) -> int:
@@ -550,12 +559,23 @@ def predict_future(payload: dict[str, Any]) -> dict[str, Any]:
         input_df = pd.DataFrame(sequence_rows, columns=LSTM_FEATURES)
         scaled = MODELS.future_scaler.transform(input_df.to_numpy())
         tensor = scaled.reshape(1, 3, len(LSTM_FEATURES))
-        label = coerce_label(MODELS.future_model.predict(tensor, verbose=0))
+        labels = coerce_labels(MODELS.future_model.predict(tensor, verbose=0))
+        label = labels[0]
         result = level_payload(label, "future")
         current_row = build_current_row(current)
         result["target_time"] = target.isoformat(timespec="minutes")
         result["features"] = sequence_rows[-1]
         result["sequence_features"] = sequence_rows
+        result["forecast_points"] = [
+            {
+                "offset_hours": index + 1,
+                "target_time": (now + timedelta(hours=index + 1)).isoformat(timespec="minutes"),
+                "aqi_label": future_label,
+                "status": AQI_LEVELS[future_label]["status"],
+                "tone": AQI_LEVELS[future_label]["tone"],
+            }
+            for index, future_label in enumerate(labels[:3])
+        ]
         result["explanations"] = explain_features(current_row, MODELS.current_model)
         result["audience_guidance"] = audience_guidance(label)
         return result

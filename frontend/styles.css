@@ -618,6 +618,15 @@ h3 {
   stroke-width: 2;
 }
 
+.chart-point-group.is-observed .chart-point {
+  stroke: var(--ink);
+}
+
+.chart-point-group.is-forecast .chart-point {
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-dasharray: 3 2;
+}
+
 .chart-point-value {
   fill: var(--ink);
   font-size: 13px;
