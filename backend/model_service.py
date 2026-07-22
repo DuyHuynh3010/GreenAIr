@@ -1,15 +1,29 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import os
 from pathlib import Path
 from typing import Any
 
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
+
 try:
     import joblib
+    import numpy as np
     import pandas as pd
 except ImportError:
     joblib = None
+    np = None
     pd = None
+
+try:
+    from keras.models import load_model
+except ImportError:
+    try:
+        from tensorflow.keras.models import load_model
+    except ImportError:
+        load_model = None
 
 
 MODELS_DIR = Path(__file__).resolve().parent / "models"
@@ -50,6 +64,26 @@ FUTURE_FEATURES = [
     "pm10_lag2",
     "o3_lag2",
     "co_lag2",
+]
+
+LSTM_FEATURES = [
+    "co",
+    "no",
+    "no2",
+    "o3",
+    "so2",
+    "pm2_5",
+    "pm10",
+    "nh3",
+    "temperature_C",
+    "humidity_%",
+    "rain_mm",
+    "wind_speed_kmh",
+    "is_event_anomaly",
+    "hour",
+    "month",
+    "dayofweek",
+    "o3_was_missing",
 ]
 
 FEATURE_LABELS = {
@@ -140,22 +174,34 @@ class ModelStore:
         self.current_scaler = None
         self.future_model = None
         self.future_scaler = None
+        self.future_model_kind = "missing"
         self.error = ""
         self.load()
 
     def load(self) -> None:
-        if joblib is None or pd is None:
+        if joblib is None or pd is None or np is None:
             self.error = "Missing Python packages. Install backend/requirements.txt before running inference."
             return
 
         try:
             self.current_model = joblib.load(MODELS_DIR / "hcmc_rf_model.pkl")
             self.current_scaler = joblib.load(MODELS_DIR / "hcmc_scaler.pkl")
-            future_model_path = MODELS_DIR / "hcmc_aqi_future_model.pkl"
-            future_scaler_path = MODELS_DIR / "hcmc_aqi_future_scaler.pkl"
-            if future_model_path.exists() and future_scaler_path.exists():
-                self.future_model = joblib.load(future_model_path)
-                self.future_scaler = joblib.load(future_scaler_path)
+            lstm_model_path = MODELS_DIR / "best_lstm_label_regression_model.keras"
+            lstm_scaler_path = MODELS_DIR / "scaler_X.pkl"
+            if lstm_model_path.exists() and lstm_scaler_path.exists():
+                self.future_scaler = joblib.load(lstm_scaler_path)
+                if load_model is None:
+                    self.error = "LSTM model files found, but TensorFlow/Keras is not installed."
+                else:
+                    self.future_model = load_model(lstm_model_path, compile=False)
+                    self.future_model_kind = "lstm"
+            else:
+                future_model_path = MODELS_DIR / "hcmc_aqi_future_model.pkl"
+                future_scaler_path = MODELS_DIR / "hcmc_aqi_future_scaler.pkl"
+                if future_model_path.exists() and future_scaler_path.exists():
+                    self.future_model = joblib.load(future_model_path)
+                    self.future_scaler = joblib.load(future_scaler_path)
+                    self.future_model_kind = "random_forest"
         except Exception as exc:
             self.error = str(exc)
 
@@ -168,12 +214,18 @@ class ModelStore:
         return self.future_model is not None and self.future_scaler is not None
 
     def health(self) -> dict[str, Any]:
+        info = model_info()
+        if self.future_model_kind == "random_forest":
+            info["future_model"] = "Lag-based RandomForestClassifier for next-hour AQI forecasting"
+            info["future_features"] = FUTURE_FEATURES
+        elif self.future_model_kind == "missing":
+            info["future_model"] = "Future AQI model not loaded"
         return {
             "ok": True,
             "current_model_ready": self.current_ready,
             "future_model_ready": self.future_ready,
             "error": self.error,
-            "model_info": model_info(),
+            "model_info": info,
         }
 
 
@@ -184,9 +236,9 @@ def model_info() -> dict[str, Any]:
     return {
         "project": "GreenAIr",
         "current_model": "RandomForestClassifier for current AQI classification",
-        "future_model": "Lag-based RandomForestClassifier for next-hour AQI forecasting",
+        "future_model": "Stacked LSTM regression model for next-hour AQI label forecasting",
         "current_features": CURRENT_FEATURES,
-        "future_features": FUTURE_FEATURES,
+        "future_features": LSTM_FEATURES,
         "output": "AQI risk level from 1 to 5",
         "demo_note": "Predictions are generated from teammate-provided trained model files. Presets are sample demo scenarios, not live sensor readings.",
     }
@@ -224,6 +276,69 @@ def build_current_row(payload: dict[str, Any]) -> dict[str, float]:
     if row["humidity_%"] > 100:
         raise InputError("humidity_% cannot be greater than 100.")
     return row
+
+
+def build_lstm_row(payload: dict[str, Any], moment: datetime) -> dict[str, float]:
+    row = build_current_row(payload)
+    return {
+        "co": row["co"],
+        "no": row["no"],
+        "no2": row["no2"],
+        "o3": row["o3"],
+        "so2": row["so2"],
+        "pm2_5": row["pm2_5"],
+        "pm10": row["pm10"],
+        "nh3": row["nh3"],
+        "temperature_C": row["temperature_C"],
+        "humidity_%": row["humidity_%"],
+        "rain_mm": row["rain_mm"],
+        "wind_speed_kmh": row["wind_speed_kmh"],
+        "is_event_anomaly": row["is_event_anomaly"],
+        "hour": float(moment.hour),
+        "month": float(moment.month),
+        "dayofweek": float(moment.weekday()),
+        "o3_was_missing": to_float(payload, "o3_was_missing", 0.0),
+    }
+
+
+def estimate_previous_row(current: dict[str, Any], fallback: dict[str, Any], age_hours: int) -> dict[str, float]:
+    source = fallback if fallback else current
+    factor = max(0.72, 1 - 0.08 * age_hours)
+    return {
+        "co": to_float(source, "co", to_float(current, "co") * factor),
+        "no": to_float(source, "no", to_float(current, "no") * factor),
+        "no2": to_float(source, "no2", to_float(current, "no2") * factor),
+        "o3": to_float(source, "o3", to_float(current, "o3") * factor),
+        "so2": to_float(source, "so2", to_float(current, "so2") * factor),
+        "pm2_5": to_float(source, "pm2_5", to_float(current, "pm2_5") * factor),
+        "pm10": to_float(source, "pm10", to_float(current, "pm10") * factor),
+        "nh3": to_float(source, "nh3", to_float(current, "nh3") * factor),
+        "temperature_C": to_float(
+            source,
+            "temperature_C",
+            to_float(source, "temp", to_float(current, "temperature_C", to_float(current, "temp", 30.0))),
+        ),
+        "humidity_%": to_float(
+            source,
+            "humidity_%",
+            to_float(source, "humidity", to_float(current, "humidity_%", to_float(current, "humidity", 70.0))),
+        ),
+        "rain_mm": to_float(source, "rain_mm", to_float(source, "rain", to_float(current, "rain_mm", to_float(current, "rain", 0.0)))),
+        "wind_speed_kmh": to_float(
+            source,
+            "wind_speed_kmh",
+            to_float(source, "wind", to_float(current, "wind_speed_kmh", to_float(current, "wind", 8.0))),
+        ),
+        "is_event_anomaly": to_float(source, "is_event_anomaly", 0.0),
+        "o3_was_missing": to_float(source, "o3_was_missing", 0.0),
+    }
+
+
+def coerce_label(raw_prediction: Any) -> int:
+    value = float(np.asarray(raw_prediction).reshape(-1)[0])
+    if 0.0 <= value <= 1.0:
+        value = 1.0 + value * 4.0
+    return max(1, min(5, int(round(value))))
 
 
 def level_payload(label: int, kind: str) -> dict[str, Any]:
@@ -318,6 +433,28 @@ def predict_future(payload: dict[str, Any]) -> dict[str, Any]:
     now_text = payload.get("timestamp")
     now = datetime.fromisoformat(now_text.replace("Z", "+00:00")) if now_text else datetime.now()
     target = now + timedelta(hours=1)
+
+    if MODELS.future_model_kind == "lstm":
+        previous_rows = history if isinstance(history, list) else [history]
+        previous_2h = estimate_previous_row(current, previous_rows[0] if previous_rows else current, 2)
+        previous_1h = estimate_previous_row(current, previous_rows[-1] if previous_rows else current, 1)
+        sequence_rows = [
+            build_lstm_row(previous_2h, now - timedelta(hours=2)),
+            build_lstm_row(previous_1h, now - timedelta(hours=1)),
+            build_lstm_row(current, now),
+        ]
+        input_df = pd.DataFrame(sequence_rows, columns=LSTM_FEATURES)
+        scaled = MODELS.future_scaler.transform(input_df.to_numpy())
+        tensor = scaled.reshape(1, 3, len(LSTM_FEATURES))
+        label = coerce_label(MODELS.future_model.predict(tensor, verbose=0))
+        result = level_payload(label, "future")
+        current_row = build_current_row(current)
+        result["target_time"] = target.isoformat(timespec="minutes")
+        result["features"] = sequence_rows[-1]
+        result["sequence_features"] = sequence_rows
+        result["explanations"] = explain_features(current_row, MODELS.current_model)
+        result["audience_guidance"] = audience_guidance(label)
+        return result
 
     row = {
         "hour": target.hour,

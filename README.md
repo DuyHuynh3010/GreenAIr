@@ -12,7 +12,7 @@ Build a local demo website that lets users enter air quality indicators, runs a 
 - Health warning based on predicted AQI level
 - Visual dashboard for pollutant values
 - Local prediction history
-- Optional next-hour forecast using lag-based model files
+- Optional next-hour forecast using the teammate-provided LSTM model
 - AI explanation cards for the strongest prediction drivers
 - Audience-specific guidance for children, older adults, respiratory risk groups, and commuters
 - Model transparency panel with feature and output metadata
@@ -23,6 +23,11 @@ The trained model files are expected to be placed under `backend/models/`:
 
 - `hcmc_rf_model.pkl`
 - `hcmc_scaler.pkl`
+- `best_lstm_label_regression_model.keras`
+- `scaler_X.pkl`
+
+The backend still supports the older lag-based future model files as a fallback:
+
 - `hcmc_aqi_future_model.pkl`
 - `hcmc_aqi_future_scaler.pkl`
 
@@ -44,4 +49,4 @@ http://127.0.0.1:8000
 
 - `GET /api/health` returns model readiness and model metadata.
 - `POST /api/predict/current` returns current AQI classification, explanation drivers, and guidance.
-- `POST /api/predict/future` returns next-hour AQI forecasting using current values and previous values as lag inputs.
+- `POST /api/predict/future` returns next-hour AQI forecasting using a 3-step LSTM input sequence.
