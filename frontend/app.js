@@ -1,8 +1,6 @@
 const form = document.querySelector("#predictionForm");
 const currentModelState = document.querySelector("#currentModelState");
 const futureModelState = document.querySelector("#futureModelState");
-const currentMode = document.querySelector("#currentMode");
-const futureMode = document.querySelector("#futureMode");
 const formModeLabel = document.querySelector("#formModeLabel");
 const resultBand = document.querySelector("#resultBand");
 const aqiNumber = document.querySelector("#aqiNumber");
@@ -31,7 +29,6 @@ const stationSelector = document.querySelector("#stationSelector");
 const stationScenario = document.querySelector("#stationScenario");
 const stationNote = document.querySelector("#stationNote");
 
-let mode = "current";
 let modelsReady = { current: false, future: false };
 let selectedStationIndex = 0;
 let autoLiveTimer = null;
@@ -230,9 +227,8 @@ function renderStationSelector() {
 }
 
 async function fetchLiveSample({ auto = false } = {}) {
-  const ready = mode === "future" ? modelsReady.future : modelsReady.current;
-  if (!ready) {
-    liveStatus.textContent = "Model offline";
+  if (!modelsReady.current) {
+    liveStatus.textContent = "AQI calculator offline";
     return;
   }
 
@@ -240,16 +236,9 @@ async function fetchLiveSample({ auto = false } = {}) {
   const sample = buildLiveSample(station);
 
   liveTimestamp.textContent = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  liveStatus.textContent = auto ? `Auto cycling (${mode})` : `Sample loaded (${mode})`;
+  liveStatus.textContent = auto ? "Auto cycling" : "Sample loaded";
   fillForm(sample);
   await runPrediction(sample);
-  try {
-    await generateStationForecast(sample);
-  } catch (error) {
-    stationForecast = [];
-    trendSummary.textContent = "Forecast unavailable";
-    aqiTrendChart.innerHTML = `<div class="chart-empty">${error.message}</div>`;
-  }
 }
 
 function toggleAutoLive() {
@@ -257,7 +246,7 @@ function toggleAutoLive() {
     clearInterval(autoLiveTimer);
     autoLiveTimer = null;
     autoLiveButton.textContent = "Auto cycle: off";
-    liveStatus.textContent = "Manual mode";
+    liveStatus.textContent = "Ready";
     return;
   }
 
@@ -319,17 +308,6 @@ async function generateStationForecast(baseSample) {
   renderAqiTrend();
 }
 
-function setMode(nextMode) {
-  mode = nextMode;
-  currentMode.classList.toggle("active", mode === "current");
-  futureMode.classList.toggle("active", mode === "future");
-  formModeLabel.textContent = mode === "current" ? "Current AQI formula" : "3-hour LSTM forecast";
-  runButton.textContent = mode === "current" ? "Calculate" : "Forecast";
-  runButton.disabled = mode === "current" ? !modelsReady.current : !modelsReady.future;
-  stationForecast = [];
-  renderAqiTrend();
-}
-
 function toneClass(tone) {
   return `tone-${tone || "good"}`;
 }
@@ -339,19 +317,14 @@ function formatTime(value) {
 }
 
 function updateResult(result, submittedFeatures) {
-  const kind = result.kind === "future" ? "3-hour forecast" : "Current air quality";
-  const time =
-    result.kind === "future" && result.forecast_points?.length
-      ? `${formatTime(result.forecast_points[0].target_time)} - ${formatTime(result.forecast_points[result.forecast_points.length - 1].target_time)}`
-      : result.target_time
-        ? formatTime(result.target_time)
-        : "Now";
+  const kind = "Current air quality";
+  const time = result.target_time ? formatTime(result.target_time) : "Now";
 
   aqiNumber.textContent = result.aqi_label;
   resultKind.textContent = kind;
   resultTitle.textContent = `Level ${result.aqi_label} - ${result.status}`;
   resultAdvice.textContent =
-    result.kind === "current" && result.primary_pollutant
+    result.primary_pollutant
       ? `${result.advice} Main driver: ${result.primary_pollutant}. Calculated AQI score: ${result.aqi_score}.`
       : result.advice;
   targetTime.textContent = time;
@@ -385,7 +358,7 @@ function renderBars(values) {
 function renderExplanations(items) {
   explanationList.innerHTML = items.length
     ? ""
-    : `<div class="empty-state">Run the model to see the strongest drivers.</div>`;
+    : `<div class="empty-state">Calculate AQI to see the strongest drivers.</div>`;
 
   items.forEach((item) => {
     const card = document.createElement("article");
@@ -489,7 +462,7 @@ function renderHistory() {
       <div class="history-score ${toneClass(item.tone)}">${item.label}</div>
       <div>
         <strong>${item.status}</strong>
-        <span>${item.kind === "future" ? "Next 3 hours" : "Current"} - ${item.time}</span>
+        <span>Current - ${item.time}</span>
         <div class="history-spark" style="--spark:${Math.max(20, item.label * 20)}%"></div>
       </div>
     `;
@@ -611,7 +584,7 @@ function renderScenarioComparison() {
       <div class="comparison-card-head">
         <div>
           <span>Scenario ${items.length - index}</span>
-          <strong>${item.kind === "future" ? "3-hour forecast" : "Current AQI"}</strong>
+          <strong>Current AQI</strong>
         </div>
         <div class="comparison-score ${toneClass(item.tone)}">${item.label}</div>
       </div>
@@ -664,7 +637,10 @@ async function checkHealth() {
     resultTitle.textContent = "Cannot reach local backend";
     resultAdvice.textContent = "Start the server with: .\\venv\\Scripts\\python.exe backend\\server.py";
   } finally {
-    setMode(mode);
+    formModeLabel.textContent = "Current AQI formula + 3-hour LSTM forecast";
+    runButton.disabled = !modelsReady.current;
+    runButton.textContent = "Calculate AQI";
+    renderAqiTrend();
   }
 }
 
@@ -677,20 +653,27 @@ async function submitPrediction(event) {
 async function runPrediction(values) {
   renderBars(values);
   form.classList.add("is-loading");
-  runButton.textContent = "Running...";
+  runButton.textContent = "Calculating...";
 
   try {
-    const result = await requestPrediction(values, mode);
+    const result = await requestPrediction(values, "current");
     updateResult(result, values);
+    try {
+      await generateStationForecast(values);
+    } catch (error) {
+      stationForecast = [];
+      trendSummary.textContent = "Forecast unavailable";
+      aqiTrendChart.innerHTML = `<div class="chart-empty">${error.message}</div>`;
+    }
   } catch (error) {
     aqiNumber.textContent = "!";
     resultKind.textContent = "Error";
-    resultTitle.textContent = "The model could not run";
+    resultTitle.textContent = "The AQI calculation could not run";
     resultAdvice.textContent = error.message;
     targetTime.textContent = "--";
   } finally {
     form.classList.remove("is-loading");
-    runButton.textContent = mode === "current" ? "Calculate" : "Forecast";
+    runButton.textContent = "Calculate AQI";
   }
 }
 
@@ -726,8 +709,6 @@ document.querySelectorAll(".preset-button").forEach((button) => {
   button.addEventListener("click", () => fillForm(presets[button.dataset.preset]));
 });
 
-currentMode.addEventListener("click", () => setMode("current"));
-futureMode.addEventListener("click", () => setMode("future"));
 form.addEventListener("submit", submitPrediction);
 form.addEventListener("input", () => renderBars(getFormData()));
 clearHistory.addEventListener("click", () => {

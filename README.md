@@ -4,7 +4,7 @@ Hackathon demo for formula-based current AQI calculation, LSTM 3-hour forecastin
 
 ## Goal
 
-Build a local demo website that lets users enter or load prepared air quality indicators, calculates current AQI with fixed sub-index rules, runs a trained LSTM model for 3-hour AQI level forecasting, and returns practical health guidance.
+Build a local demo website that lets users enter or load prepared air quality indicators, calculates current AQI with fixed sub-index rules, automatically runs a trained LSTM model for 3-hour AQI level forecasting, and returns practical health guidance.
 
 ## Planned Demo Features
 
@@ -12,7 +12,7 @@ Build a local demo website that lets users enter or load prepared air quality in
 - Health warning based on predicted AQI level
 - Visual dashboard for pollutant values
 - Local prediction history
-- 3-hour forecast using the teammate-provided LSTM model
+- Automatic 3-hour forecast using the teammate-provided LSTM model
 - Station forecast chart with `-2h`, `-1h`, `Now`, `+1h`, `+2h`, and `+3h`
 - AI explanation cards for the strongest prediction drivers
 - Audience-specific guidance for children, older adults, respiratory risk groups, and commuters

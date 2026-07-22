@@ -62,10 +62,6 @@
             <p class="eyebrow">Ho Chi Minh City air quality classifier</p>
             <h2>AI Air Quality Dashboard</h2>
           </div>
-          <div class="mode-switch" role="tablist" aria-label="Prediction mode">
-            <button id="currentMode" class="mode-button active" type="button">Current</button>
-            <button id="futureMode" class="mode-button" type="button">Next 3 hours</button>
-          </div>
         </header>
 
         <section class="result-band" id="resultBand">
@@ -74,11 +70,11 @@
           </div>
           <div class="result-copy">
             <p class="result-kicker" id="resultKind">Ready</p>
-            <h3 id="resultTitle">Enter air indicators to run the model</h3>
-            <p id="resultAdvice">The trained model result and health recommendation will appear here.</p>
+            <h3 id="resultTitle">Enter air indicators to calculate current AQI</h3>
+            <p id="resultAdvice">The current AQI level, health recommendation, and forecast chart will appear here.</p>
           </div>
           <div class="target-time">
-            <span>Forecast window</span>
+            <span>Current time</span>
             <strong id="targetTime">Now</strong>
           </div>
         </section>
@@ -111,7 +107,7 @@
               <p class="panel-title">Realtime Data Demo</p>
               <span>Choose a monitoring point, then load a prepared live-style sample</span>
             </div>
-            <strong id="liveStatus">Manual mode</strong>
+            <strong id="liveStatus">Ready</strong>
           </div>
           <div class="live-grid">
             <div class="live-map">
@@ -143,9 +139,9 @@
             <div class="form-heading">
               <div>
                 <p class="panel-title">Model Inputs</p>
-                <span id="formModeLabel">Current AQI classification</span>
+                <span id="formModeLabel">Current AQI formula + 3-hour LSTM forecast</span>
               </div>
-              <button id="runButton" class="primary-button" type="submit">Calculate</button>
+              <button id="runButton" class="primary-button" type="submit">Calculate AQI</button>
             </div>
 
             <div class="input-grid">
