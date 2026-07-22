@@ -308,8 +308,8 @@ function setMode(nextMode) {
   mode = nextMode;
   currentMode.classList.toggle("active", mode === "current");
   futureMode.classList.toggle("active", mode === "future");
-  formModeLabel.textContent = mode === "current" ? "Current AQI formula" : "Next-hour LSTM forecast";
-  runButton.textContent = mode === "current" ? "Calculate" : "Run LSTM";
+  formModeLabel.textContent = mode === "current" ? "Current AQI formula" : "3-hour LSTM forecast";
+  runButton.textContent = mode === "current" ? "Calculate" : "Forecast";
   runButton.disabled = mode === "current" ? !modelsReady.current : !modelsReady.future;
   stationForecast = [];
   renderAqiTrend();
@@ -324,8 +324,13 @@ function formatTime(value) {
 }
 
 function updateResult(result, submittedFeatures) {
-  const kind = result.kind === "future" ? "Next-hour forecast" : "Current air quality";
-  const time = result.target_time ? formatTime(result.target_time) : "Now";
+  const kind = result.kind === "future" ? "3-hour forecast" : "Current air quality";
+  const time =
+    result.kind === "future" && result.forecast_points?.length
+      ? `${formatTime(result.forecast_points[0].target_time)} - ${formatTime(result.forecast_points[result.forecast_points.length - 1].target_time)}`
+      : result.target_time
+        ? formatTime(result.target_time)
+        : "Now";
 
   aqiNumber.textContent = result.aqi_label;
   resultKind.textContent = kind;
@@ -469,7 +474,7 @@ function renderHistory() {
       <div class="history-score ${toneClass(item.tone)}">${item.label}</div>
       <div>
         <strong>${item.status}</strong>
-        <span>${item.kind === "future" ? "+1 hour" : "Current"} - ${item.time}</span>
+        <span>${item.kind === "future" ? "Next 3 hours" : "Current"} - ${item.time}</span>
         <div class="history-spark" style="--spark:${Math.max(20, item.label * 20)}%"></div>
       </div>
     `;
@@ -591,7 +596,7 @@ function renderScenarioComparison() {
       <div class="comparison-card-head">
         <div>
           <span>Scenario ${items.length - index}</span>
-          <strong>${item.kind === "future" ? "Next-hour forecast" : "Current AQI"}</strong>
+          <strong>${item.kind === "future" ? "3-hour forecast" : "Current AQI"}</strong>
         </div>
         <div class="comparison-score ${toneClass(item.tone)}">${item.label}</div>
       </div>
@@ -670,7 +675,7 @@ async function runPrediction(values) {
     targetTime.textContent = "--";
   } finally {
     form.classList.remove("is-loading");
-    runButton.textContent = mode === "current" ? "Calculate" : "Run LSTM";
+    runButton.textContent = mode === "current" ? "Calculate" : "Forecast";
   }
 }
 

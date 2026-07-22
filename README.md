@@ -27,7 +27,7 @@ The future forecast model files are expected to be placed under `backend/models/
 
 The current AQI mode does not require a model file. It uses fixed pollutant sub-index breakpoints.
 
-The backend still supports the older lag-based future model files as a fallback:
+The backend still supports the older lag-based next-hour model files as a fallback:
 
 - `hcmc_aqi_future_model.pkl`
 - `hcmc_aqi_future_scaler.pkl`

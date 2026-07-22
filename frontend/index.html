@@ -30,7 +30,7 @@
             <strong id="currentModelState">Checking</strong>
           </div>
           <div class="status-row">
-            <span>Next-hour model</span>
+            <span>3-hour forecast model</span>
             <strong id="futureModelState">Checking</strong>
           </div>
         </section>
@@ -64,7 +64,7 @@
           </div>
           <div class="mode-switch" role="tablist" aria-label="Prediction mode">
             <button id="currentMode" class="mode-button active" type="button">Current</button>
-            <button id="futureMode" class="mode-button" type="button">+1 hour</button>
+            <button id="futureMode" class="mode-button" type="button">Next 3 hours</button>
           </div>
         </header>
 
@@ -78,7 +78,7 @@
             <p id="resultAdvice">The trained model result and health recommendation will appear here.</p>
           </div>
           <div class="target-time">
-            <span>Prediction time</span>
+            <span>Forecast window</span>
             <strong id="targetTime">Now</strong>
           </div>
         </section>
@@ -91,7 +91,7 @@
             </div>
             <strong id="trendSummary">Choose a station</strong>
           </div>
-          <div id="aqiTrendChart" class="aqi-chart" aria-label="Selected station next-hours AQI forecast chart"></div>
+          <div id="aqiTrendChart" class="aqi-chart" aria-label="Selected station 6-point AQI timeline chart"></div>
         </section>
 
         <section class="comparison-panel">
