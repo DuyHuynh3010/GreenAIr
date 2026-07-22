@@ -399,15 +399,24 @@ def estimate_previous_row(current: dict[str, Any], fallback: dict[str, Any], age
 
 
 def coerce_label(raw_prediction: Any) -> int:
+    return max(1, min(5, int(round(coerce_level_value(raw_prediction)))))
+
+
+def coerce_level_value(raw_prediction: Any) -> float:
     value = float(np.asarray(raw_prediction).reshape(-1)[0])
     if 0.0 <= value <= 1.0:
         value = 1.0 + value * 4.0
-    return max(1, min(5, int(round(value))))
+    return max(1.0, min(5.0, value))
 
 
 def coerce_labels(raw_prediction: Any) -> list[int]:
     values = np.asarray(raw_prediction).reshape(-1)
     return [coerce_label(value) for value in values]
+
+
+def coerce_level_values(raw_prediction: Any) -> list[float]:
+    values = np.asarray(raw_prediction).reshape(-1)
+    return [round(coerce_level_value(value), 2) for value in values]
 
 
 def interpolate_aqi(value: float, breakpoints: list[tuple[float, float, int, int]]) -> int:
@@ -559,7 +568,9 @@ def predict_future(payload: dict[str, Any]) -> dict[str, Any]:
         input_df = pd.DataFrame(sequence_rows, columns=LSTM_FEATURES)
         scaled = MODELS.future_scaler.transform(input_df.to_numpy())
         tensor = scaled.reshape(1, 3, len(LSTM_FEATURES))
-        labels = coerce_labels(MODELS.future_model.predict(tensor, verbose=0))
+        raw_prediction = MODELS.future_model.predict(tensor, verbose=0)
+        labels = coerce_labels(raw_prediction)
+        level_values = coerce_level_values(raw_prediction)
         label = labels[0]
         result = level_payload(label, "future")
         current_row = build_current_row(current)
@@ -571,6 +582,7 @@ def predict_future(payload: dict[str, Any]) -> dict[str, Any]:
                 "offset_hours": index + 1,
                 "target_time": (now + timedelta(hours=index + 1)).isoformat(timespec="minutes"),
                 "aqi_label": future_label,
+                "aqi_value": level_values[index],
                 "status": AQI_LEVELS[future_label]["status"],
                 "tone": AQI_LEVELS[future_label]["tone"],
             }

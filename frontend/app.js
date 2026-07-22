@@ -190,6 +190,19 @@ function buildPastSample(currentSample, fallbackHistory, ageHours) {
   );
 }
 
+function scoreToChartValue(score) {
+  const value = Number(score || 0);
+  if (value <= 50) return 1 + (value / 50) * 0.99;
+  if (value <= 100) return 2 + ((value - 51) / 49) * 0.99;
+  if (value <= 150) return 3 + ((value - 101) / 49) * 0.99;
+  if (value <= 200) return 4 + ((value - 151) / 49) * 0.99;
+  return Math.min(5, 5 + ((value - 201) / 299) * 0.5);
+}
+
+function formatChartValue(value) {
+  return Number(value).toFixed(1);
+}
+
 function selectStation(index) {
   selectedStationIndex = index;
   const station = liveStations[selectedStationIndex];
@@ -281,6 +294,7 @@ async function generateStationForecast(baseSample) {
       const result = await requestPrediction(point.sample, "current");
       return {
         label: result.aqi_label,
+        value: scoreToChartValue(result.aqi_score),
         status: result.status,
         tone: result.tone,
         hourLabel: point.hourLabel,
@@ -293,6 +307,7 @@ async function generateStationForecast(baseSample) {
   const futureResult = await requestFuturePrediction(baseSample, [previous2, previous1], now.toISOString());
   const futurePoints = (futureResult.forecast_points || [futureResult]).slice(0, 3).map((point, index) => ({
     label: point.aqi_label,
+    value: Number(point.aqi_value || point.aqi_label),
     status: point.status,
     tone: point.tone,
     hourLabel: `+${index + 1}h`,
@@ -496,8 +511,8 @@ function renderAqiTrend() {
   }
 
   const currentPoint = samples.find((sample) => sample.hourLabel === "Now") || samples[0];
-  const last = samples[samples.length - 1].label;
-  const delta = last - currentPoint.label;
+  const last = samples[samples.length - 1].value ?? samples[samples.length - 1].label;
+  const delta = last - (currentPoint.value ?? currentPoint.label);
   const width = 760;
   const height = 260;
   const pad = { top: 30, right: 26, bottom: 46, left: 50 };
@@ -505,14 +520,14 @@ function renderAqiTrend() {
   const plotHeight = height - pad.top - pad.bottom;
   const xFor = (index) => pad.left + (samples.length === 1 ? plotWidth / 2 : (index / (samples.length - 1)) * plotWidth);
   const yFor = (level) => pad.top + ((5 - level) / 4) * plotHeight;
-  const points = samples.map((sample, index) => `${xFor(index)},${yFor(sample.label)}`).join(" ");
+  const points = samples.map((sample, index) => `${xFor(index)},${yFor(sample.value ?? sample.label)}`).join(" ");
   const areaPoints = `${pad.left},${pad.top + plotHeight} ${points} ${pad.left + plotWidth},${pad.top + plotHeight}`;
 
   trendSummary.textContent =
     delta > 0
-      ? `+3h up ${delta} level${delta > 1 ? "s" : ""}`
+      ? `+3h up ${delta.toFixed(1)}`
       : delta < 0
-        ? `+3h down ${Math.abs(delta)} level${Math.abs(delta) > 1 ? "s" : ""}`
+        ? `+3h down ${Math.abs(delta).toFixed(1)}`
         : "Forecast stable";
   aqiTrendChart.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="LSTM AQI forecast for selected station">
@@ -543,18 +558,18 @@ function renderAqiTrend() {
           `;
         })
         .join("")}
-      <text class="chart-axis-caption" x="${pad.left}" y="20">Predicted AQI level - ${station.name}</text>
+      <text class="chart-axis-caption" x="${pad.left}" y="20">AQI level value - ${station.name}</text>
       <polygon class="chart-area" points="${areaPoints}" />
       <polyline class="chart-line" points="${points}" filter="url(#aqiGlow)" />
       ${samples
         .map((sample, index) => {
           const x = xFor(index);
-          const y = yFor(sample.label);
+          const y = yFor(sample.value ?? sample.label);
           return `
             <g class="chart-point-group ${sample.observed ? "is-observed" : "is-forecast"}">
               <circle class="chart-point-halo" cx="${x}" cy="${y}" r="13"></circle>
               <circle class="chart-point ${toneClass(sample.tone)}" cx="${x}" cy="${y}" r="7"></circle>
-              <text class="chart-point-value" x="${x}" y="${Math.max(18, y - 17)}">${sample.label}</text>
+              <text class="chart-point-value" x="${x}" y="${Math.max(18, y - 17)}">${formatChartValue(sample.value ?? sample.label)}</text>
               <text class="chart-point-label" x="${x}" y="${height - 16}">${sample.hourLabel}</text>
             </g>
           `;
