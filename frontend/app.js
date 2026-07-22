@@ -23,6 +23,7 @@ const comparisonSummary = document.querySelector("#comparisonSummary");
 const liveStatus = document.querySelector("#liveStatus");
 const liveTimestamp = document.querySelector("#liveTimestamp");
 const stationName = document.querySelector("#stationName");
+const resultLocation = document.querySelector("#resultLocation");
 const fetchLiveButton = document.querySelector("#fetchLiveButton");
 const autoLiveButton = document.querySelector("#autoLiveButton");
 const stationSelector = document.querySelector("#stationSelector");
@@ -95,28 +96,28 @@ const presets = {
 
 const liveStations = [
   {
-    name: "Ben Thanh, District 1",
+    name: "District 1",
     scenario: "busy",
-    label: "Traffic center",
-    note: "A downtown traffic-heavy sample for rush-hour conditions.",
+    label: "Central business area",
+    note: "A downtown District 1 sample for rush-hour traffic conditions.",
   },
   {
-    name: "Saigon Hi-Tech Park, Thu Duc",
+    name: "Thu Duc City",
     scenario: "clear",
     label: "Open urban area",
-    note: "A cleaner morning sample from a more open urban area.",
+    note: "A cleaner morning sample from Thu Duc City's more open urban areas.",
   },
   {
-    name: "Binh Thanh residential area",
+    name: "Binh Thanh District",
     scenario: "rain",
-    label: "After rain",
-    note: "A humid after-rain sample where particles are lower but humidity is high.",
+    label: "Residential area",
+    note: "A humid after-rain sample from Binh Thanh District where particles are lower but humidity is high.",
   },
   {
-    name: "Tan Binh airport corridor",
+    name: "Tan Binh District",
     scenario: "alert",
-    label: "Pollution alert",
-    note: "A high-risk sample representing dense traffic near the airport corridor.",
+    label: "Airport corridor",
+    note: "A high-risk Tan Binh District sample representing dense traffic near the airport corridor.",
   },
 ];
 
@@ -204,6 +205,7 @@ function selectStation(index) {
   selectedStationIndex = index;
   const station = liveStations[selectedStationIndex];
   stationName.textContent = station.name;
+  resultLocation.textContent = station.name;
   stationScenario.textContent = station.label;
   stationNote.textContent = station.note;
   stationForecast = [];

@@ -371,7 +371,7 @@ h3 {
 .result-band {
   position: relative;
   display: grid;
-  grid-template-columns: 128px minmax(0, 1fr) 160px;
+  grid-template-columns: 128px minmax(0, 1fr) repeat(2, minmax(130px, 150px));
   align-items: center;
   gap: 22px;
   min-height: 180px;
@@ -438,7 +438,8 @@ h3 {
   display: grid;
   gap: 8px;
   justify-items: start;
-  padding: 16px;
+  min-height: 92px;
+  padding: 14px;
   background: rgba(255, 255, 255, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.34);
   border-radius: 8px;
@@ -455,6 +456,7 @@ h3 {
 
 .target-time strong {
   font-size: 16px;
+  line-height: 1.25;
 }
 
 .content-grid {
