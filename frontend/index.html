@@ -10,7 +10,14 @@
     <main class="app-shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="brand-mark">GA</div>
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" role="img">
+              <path d="M24 40V24" />
+              <path d="M24 25C15 25 9 20 8 11c9 0 16 4 16 14Z" />
+              <path d="M24 25c9 0 15-5 16-14-9 0-16 4-16 14Z" />
+              <path d="M18 40h12" />
+            </svg>
+          </div>
           <div>
             <p class="eyebrow">Environmental AI Hackathon</p>
             <h1>GreenAIr</h1>
@@ -19,11 +26,11 @@
 
         <section class="status-panel" aria-live="polite">
           <div class="status-row">
-            <span>Current AQI model</span>
+            <span>Current AQI formula</span>
             <strong id="currentModelState">Checking</strong>
           </div>
           <div class="status-row">
-            <span>Next-hour model</span>
+            <span>3-hour forecast model</span>
             <strong id="futureModelState">Checking</strong>
           </div>
         </section>
@@ -55,10 +62,6 @@
             <p class="eyebrow">Ho Chi Minh City air quality classifier</p>
             <h2>AI Air Quality Dashboard</h2>
           </div>
-          <div class="mode-switch" role="tablist" aria-label="Prediction mode">
-            <button id="currentMode" class="mode-button active" type="button">Current</button>
-            <button id="futureMode" class="mode-button" type="button">+1 hour</button>
-          </div>
         </header>
 
         <section class="result-band" id="resultBand">
@@ -67,24 +70,61 @@
           </div>
           <div class="result-copy">
             <p class="result-kicker" id="resultKind">Ready</p>
-            <h3 id="resultTitle">Enter air indicators to run the model</h3>
-            <p id="resultAdvice">The trained model result and health recommendation will appear here.</p>
+            <h3 id="resultTitle">Enter air indicators to calculate current AQI</h3>
+            <p id="resultAdvice">The current AQI level, health recommendation, and forecast chart will appear here.</p>
           </div>
           <div class="target-time">
-            <span>Prediction time</span>
+            <span>Location</span>
+            <strong id="resultLocation">District 1</strong>
+          </div>
+          <div class="target-time">
+            <span>Current time</span>
             <strong id="targetTime">Now</strong>
           </div>
+        </section>
+
+        <section class="live-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-title">Realtime Data Demo</p>
+              <span>Choose a monitoring point, then load a prepared live-style sample</span>
+            </div>
+            <strong id="liveStatus">Ready</strong>
+          </div>
+          <div class="live-grid">
+            <div class="live-map">
+              <div class="map-pin" aria-hidden="true"></div>
+              <div>
+                <span>Station</span>
+                <strong id="stationName">District 1</strong>
+              </div>
+            </div>
+            <div class="live-meta">
+              <span>Live clock</span>
+              <strong id="liveTimestamp">--:--:--</strong>
+            </div>
+            <div class="live-meta">
+              <span>Scenario</span>
+              <strong id="stationScenario">Manual input</strong>
+            </div>
+            <div class="live-actions">
+              <button id="fetchLiveButton" class="secondary-button" type="button">Load station sample</button>
+              <button id="autoLiveButton" class="secondary-button" type="button">Auto cycle: off</button>
+            </div>
+          </div>
+          <div id="stationSelector" class="station-selector" aria-label="Realtime demo stations"></div>
+          <p id="stationNote" class="station-note">Prepared sample data will be used to simulate a realtime sensor update.</p>
         </section>
 
         <section class="trend-panel">
           <div class="panel-heading">
             <div>
-              <p class="panel-title">AQI Level Movement</p>
-              <span>Updates after each model run from your input data</span>
+              <p class="panel-title">Station AQI Forecast</p>
+              <span>Formula history plus 3-hour LSTM forecast for the selected monitoring point</span>
             </div>
-            <strong id="trendSummary">No samples yet</strong>
+            <strong id="trendSummary">Choose a station</strong>
           </div>
-          <div id="aqiTrendChart" class="aqi-chart" aria-label="AQI level movement chart"></div>
+          <div id="aqiTrendChart" class="aqi-chart" aria-label="Selected station 6-point AQI timeline chart"></div>
         </section>
 
         <section class="comparison-panel">
@@ -103,9 +143,9 @@
             <div class="form-heading">
               <div>
                 <p class="panel-title">Model Inputs</p>
-                <span id="formModeLabel">Current AQI classification</span>
+                <span id="formModeLabel">Current AQI formula + 3-hour LSTM forecast</span>
               </div>
-              <button id="runButton" class="primary-button" type="submit">Run AI</button>
+              <button id="runButton" class="primary-button" type="submit">Calculate AQI</button>
             </div>
 
             <div class="input-grid">

@@ -19,6 +19,8 @@ build/
 
 # Model/data artifacts
 backend/models/*.pkl
+backend/models/*.keras
+backend/models/*.h5
 backend/data/
 *.zip
 *.csv
