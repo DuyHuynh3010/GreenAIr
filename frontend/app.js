@@ -201,6 +201,19 @@ function formatChartValue(value) {
   return Number(value).toFixed(1);
 }
 
+function updateLiveClock() {
+  liveTimestamp.textContent = new Date().toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function startLiveClock() {
+  updateLiveClock();
+  setInterval(updateLiveClock, 1000);
+}
+
 function selectStation(index) {
   selectedStationIndex = index;
   const station = liveStations[selectedStationIndex];
@@ -237,7 +250,6 @@ async function fetchLiveSample({ auto = false } = {}) {
   const station = liveStations[selectedStationIndex];
   const sample = buildLiveSample(station);
 
-  liveTimestamp.textContent = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   liveStatus.textContent = auto ? "Auto cycling" : "Sample loaded";
   fillForm(sample);
   await runPrediction(sample);
@@ -722,6 +734,7 @@ fetchLiveButton.addEventListener("click", () => fetchLiveSample());
 autoLiveButton.addEventListener("click", toggleAutoLive);
 
 fillForm(presets.busy);
+startLiveClock();
 renderStationSelector();
 renderHistory();
 renderAqiTrend();

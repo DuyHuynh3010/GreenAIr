@@ -83,6 +83,39 @@
           </div>
         </section>
 
+        <section class="live-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-title">Realtime Data Demo</p>
+              <span>Choose a monitoring point, then load a prepared live-style sample</span>
+            </div>
+            <strong id="liveStatus">Ready</strong>
+          </div>
+          <div class="live-grid">
+            <div class="live-map">
+              <div class="map-pin" aria-hidden="true"></div>
+              <div>
+                <span>Station</span>
+                <strong id="stationName">District 1</strong>
+              </div>
+            </div>
+            <div class="live-meta">
+              <span>Live clock</span>
+              <strong id="liveTimestamp">--:--:--</strong>
+            </div>
+            <div class="live-meta">
+              <span>Scenario</span>
+              <strong id="stationScenario">Manual input</strong>
+            </div>
+            <div class="live-actions">
+              <button id="fetchLiveButton" class="secondary-button" type="button">Load station sample</button>
+              <button id="autoLiveButton" class="secondary-button" type="button">Auto cycle: off</button>
+            </div>
+          </div>
+          <div id="stationSelector" class="station-selector" aria-label="Realtime demo stations"></div>
+          <p id="stationNote" class="station-note">Prepared sample data will be used to simulate a realtime sensor update.</p>
+        </section>
+
         <section class="trend-panel">
           <div class="panel-heading">
             <div>
@@ -103,39 +136,6 @@
             <strong id="comparisonSummary">Run at least 2 scenarios</strong>
           </div>
           <div id="comparisonGrid" class="comparison-grid"></div>
-        </section>
-
-        <section class="live-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="panel-title">Realtime Data Demo</p>
-              <span>Choose a monitoring point, then load a prepared live-style sample</span>
-            </div>
-            <strong id="liveStatus">Ready</strong>
-          </div>
-          <div class="live-grid">
-            <div class="live-map">
-              <div class="map-pin" aria-hidden="true"></div>
-              <div>
-                <span>Station</span>
-                <strong id="stationName">District 1</strong>
-              </div>
-            </div>
-            <div class="live-meta">
-              <span>Sample time</span>
-              <strong id="liveTimestamp">Not synced</strong>
-            </div>
-            <div class="live-meta">
-              <span>Scenario</span>
-              <strong id="stationScenario">Manual input</strong>
-            </div>
-            <div class="live-actions">
-              <button id="fetchLiveButton" class="secondary-button" type="button">Load station sample</button>
-              <button id="autoLiveButton" class="secondary-button" type="button">Auto cycle: off</button>
-            </div>
-          </div>
-          <div id="stationSelector" class="station-selector" aria-label="Realtime demo stations"></div>
-          <p id="stationNote" class="station-note">Prepared sample data will be used to simulate a realtime sensor update.</p>
         </section>
 
         <section class="content-grid">
