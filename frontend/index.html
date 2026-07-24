@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GreenAIr Demo</title>
+    <title>Demo</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -20,7 +20,7 @@
           </div>
           <div>
             <p class="eyebrow">Environmental AI Hackathon</p>
-            <h1>GreenAIr</h1>
+            <h1>AIr</h1>
           </div>
         </div>
 
@@ -60,7 +60,7 @@
         <header class="topbar">
           <div>
             <p class="eyebrow">Ho Chi Minh City air quality classifier</p>
-            <h2>AI Air Quality Dashboard</h2>
+            <h2>AIr Dashboard</h2>
           </div>
         </header>
 
@@ -81,6 +81,17 @@
             <span>Current time</span>
             <strong id="targetTime">Now</strong>
           </div>
+        </section>
+
+        <section class="trend-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-title">Station AQI Forecast</p>
+              <span>Formula history plus 3-hour LSTM forecast for the selected monitoring point</span>
+            </div>
+            <strong id="trendSummary">Choose a station</strong>
+          </div>
+          <div id="aqiTrendChart" class="aqi-chart" aria-label="Selected station 6-point AQI timeline chart"></div>
         </section>
 
         <section class="live-panel">
@@ -114,17 +125,6 @@
           </div>
           <div id="stationSelector" class="station-selector" aria-label="Realtime demo stations"></div>
           <p id="stationNote" class="station-note">Prepared sample data will be used to simulate a realtime sensor update.</p>
-        </section>
-
-        <section class="trend-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="panel-title">Station AQI Forecast</p>
-              <span>Formula history plus 3-hour LSTM forecast for the selected monitoring point</span>
-            </div>
-            <strong id="trendSummary">Choose a station</strong>
-          </div>
-          <div id="aqiTrendChart" class="aqi-chart" aria-label="Selected station 6-point AQI timeline chart"></div>
         </section>
 
         <section class="comparison-panel">
