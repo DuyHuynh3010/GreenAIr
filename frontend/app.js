@@ -201,12 +201,16 @@ function formatChartValue(value) {
   return Number(value).toFixed(1);
 }
 
-function updateLiveClock() {
-  liveTimestamp.textContent = new Date().toLocaleTimeString("en-US", {
+function formatClockTime(value = new Date()) {
+  return value.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function updateLiveClock() {
+  liveTimestamp.textContent = formatClockTime();
 }
 
 function startLiveClock() {
@@ -330,9 +334,9 @@ function formatTime(value) {
   return new Date(value).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
-function updateResult(result, submittedFeatures) {
+function updateResult(result, submittedFeatures, submittedAt = new Date()) {
   const kind = "Current air quality";
-  const time = result.target_time ? formatTime(result.target_time) : "Now";
+  const time = result.target_time ? formatTime(result.target_time) : formatClockTime(submittedAt);
 
   aqiNumber.textContent = result.aqi_label;
   resultKind.textContent = kind;
@@ -665,13 +669,14 @@ async function submitPrediction(event) {
 }
 
 async function runPrediction(values) {
+  const submittedAt = new Date();
   renderBars(values);
   form.classList.add("is-loading");
   runButton.textContent = "Calculating...";
 
   try {
     const result = await requestPrediction(values, "current");
-    updateResult(result, values);
+    updateResult(result, values, submittedAt);
     try {
       await generateStationForecast(values);
     } catch (error) {
