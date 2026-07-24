@@ -83,6 +83,17 @@
           </div>
         </section>
 
+        <section class="trend-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-title">Station AQI Forecast</p>
+              <span>Formula history plus 3-hour LSTM forecast for the selected monitoring point</span>
+            </div>
+            <strong id="trendSummary">Choose a station</strong>
+          </div>
+          <div id="aqiTrendChart" class="aqi-chart" aria-label="Selected station 6-point AQI timeline chart"></div>
+        </section>
+
         <section class="live-panel">
           <div class="panel-heading">
             <div>
@@ -114,17 +125,6 @@
           </div>
           <div id="stationSelector" class="station-selector" aria-label="Realtime demo stations"></div>
           <p id="stationNote" class="station-note">Prepared sample data will be used to simulate a realtime sensor update.</p>
-        </section>
-
-        <section class="trend-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="panel-title">Station AQI Forecast</p>
-              <span>Formula history plus 3-hour LSTM forecast for the selected monitoring point</span>
-            </div>
-            <strong id="trendSummary">Choose a station</strong>
-          </div>
-          <div id="aqiTrendChart" class="aqi-chart" aria-label="Selected station 6-point AQI timeline chart"></div>
         </section>
 
         <section class="comparison-panel">
