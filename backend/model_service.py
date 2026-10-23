@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -10,12 +11,23 @@ os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
 
 try:
     import joblib
-    import numpy as np
-    import pandas as pd
 except ImportError:
     joblib = None
+
+try:
+    import numpy as np
+except ImportError:
     np = None
+
+try:
+    import pandas as pd
+except ImportError:
     pd = None
+
+try:
+    import onnxruntime as ort
+except ImportError:
+    ort = None
 
 try:
     from keras.models import load_model
@@ -218,6 +230,27 @@ class InputError(ValueError):
     pass
 
 
+class ExportedScaler:
+    def __init__(self, path: Path) -> None:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if data["features"] != LSTM_FEATURES:
+            raise ValueError("Exported scaler features do not match the LSTM input order.")
+        self.mean = np.asarray(data["mean"], dtype=np.float32)
+        self.scale = np.asarray(data["scale"], dtype=np.float32)
+
+    def transform(self, values: Any) -> Any:
+        return (np.asarray(values, dtype=np.float32) - self.mean) / self.scale
+
+
+class OnnxForecast:
+    def __init__(self, path: Path) -> None:
+        self.session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        self.input_name = self.session.get_inputs()[0].name
+
+    def predict(self, tensor: Any, verbose: int = 0) -> Any:
+        return self.session.run(None, {self.input_name: np.asarray(tensor, dtype=np.float32)})[0]
+
+
 class ModelStore:
     def __init__(self) -> None:
         self.current_model = None
@@ -229,28 +262,34 @@ class ModelStore:
         self.load()
 
     def load(self) -> None:
-        if joblib is None or pd is None or np is None:
-            self.error = "Missing Python packages. Install backend/requirements.txt before running inference."
+        if np is None:
+            self.error = "NumPy is not installed."
             return
 
         errors = []
         try:
             current_model_path = MODELS_DIR / "hcmc_rf_model.pkl"
             current_scaler_path = MODELS_DIR / "hcmc_scaler.pkl"
-            if current_model_path.exists() and current_scaler_path.exists():
+            if joblib is not None and current_model_path.exists() and current_scaler_path.exists():
                 self.current_model = joblib.load(current_model_path)
                 self.current_scaler = joblib.load(current_scaler_path)
         except Exception as exc:
             errors.append(f"Optional current model was not loaded: {exc}")
 
         try:
+            onnx_model_path = MODELS_DIR / "forecast.onnx"
+            exported_scaler_path = MODELS_DIR / "forecast_scaler.json"
             lstm_model_path = MODELS_DIR / "best_lstm_regression_model.h5"
             lstm_scaler_path = MODELS_DIR / "scaler_x.pkl"
             if not lstm_model_path.exists():
                 lstm_model_path = MODELS_DIR / "best_lstm_label_regression_model.keras"
             if not lstm_scaler_path.exists():
                 lstm_scaler_path = MODELS_DIR / "scaler_X.pkl"
-            if lstm_model_path.exists() and lstm_scaler_path.exists():
+            if ort is not None and onnx_model_path.exists() and exported_scaler_path.exists():
+                self.future_scaler = ExportedScaler(exported_scaler_path)
+                self.future_model = OnnxForecast(onnx_model_path)
+                self.future_model_kind = "lstm"
+            elif joblib is not None and lstm_model_path.exists() and lstm_scaler_path.exists():
                 self.future_scaler = joblib.load(lstm_scaler_path)
                 if load_model is None:
                     errors.append("LSTM model files found, but TensorFlow/Keras is not installed.")
@@ -260,10 +299,12 @@ class ModelStore:
             else:
                 future_model_path = MODELS_DIR / "hcmc_aqi_future_model.pkl"
                 future_scaler_path = MODELS_DIR / "hcmc_aqi_future_scaler.pkl"
-                if future_model_path.exists() and future_scaler_path.exists():
+                if joblib is not None and pd is not None and future_model_path.exists() and future_scaler_path.exists():
                     self.future_model = joblib.load(future_model_path)
                     self.future_scaler = joblib.load(future_scaler_path)
                     self.future_model_kind = "random_forest"
+            if self.future_model is None and not errors:
+                errors.append("Future AQI model is not available.")
         except Exception as exc:
             errors.append(str(exc))
 
@@ -271,7 +312,7 @@ class ModelStore:
 
     @property
     def current_ready(self) -> bool:
-        return joblib is not None and pd is not None and np is not None
+        return True
 
     @property
     def future_ready(self) -> bool:
@@ -531,8 +572,6 @@ def audience_guidance(label: int) -> list[dict[str, Any]]:
 
 
 def predict_current(payload: dict[str, Any]) -> dict[str, Any]:
-    if not MODELS.current_ready:
-        raise RuntimeError(MODELS.error or "Current AQI calculator is not ready.")
     row = build_current_row(payload)
     formula = calculate_current_aqi(row)
     label = formula["label"]
@@ -565,8 +604,8 @@ def predict_future(payload: dict[str, Any]) -> dict[str, Any]:
             build_lstm_row(previous_1h, now - timedelta(hours=1)),
             build_lstm_row(current, now),
         ]
-        input_df = pd.DataFrame(sequence_rows, columns=LSTM_FEATURES)
-        scaled = MODELS.future_scaler.transform(input_df.to_numpy())
+        values = np.asarray([[row[key] for key in LSTM_FEATURES] for row in sequence_rows], dtype=np.float32)
+        scaled = MODELS.future_scaler.transform(values)
         tensor = scaled.reshape(1, 3, len(LSTM_FEATURES))
         raw_prediction = MODELS.future_model.predict(tensor, verbose=0)
         labels = coerce_labels(raw_prediction)

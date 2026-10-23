@@ -1,0 +1,14 @@
+{
+  "co": 300,
+  "no": 0.4,
+  "no2": 8,
+  "o3": 22,
+  "so2": 3,
+  "pm2_5": 12,
+  "pm10": 22,
+  "nh3": 0.8,
+  "temperature_C": 29,
+  "humidity_%": 68,
+  "rain_mm": 0,
+  "wind_speed_kmh": 12
+}

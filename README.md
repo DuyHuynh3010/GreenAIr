@@ -48,9 +48,9 @@ http://127.0.0.1:8000
 
 ## Deploy on Vercel
 
-The repository exports `app:app` from the root `app.py` as a WSGI entrypoint. Vercel reads `pyproject.toml` for the entrypoint and the root `requirements.txt` for dependencies. Leave the Vercel project Root Directory at the repository root, with no custom build command or output directory.
+The repository exports `app:app` from the root `app.py` as a WSGI entrypoint. Vercel reads `pyproject.toml` for the entrypoint and lightweight inference dependencies. Leave the Vercel project Root Directory at the repository root, with no custom build command or output directory.
 
-The trained model files are ignored by Git, so a GitHub deployment does not include them. `/api/predict/current` works without model files, but the 3-hour forecast requires `backend/models/best_lstm_regression_model.h5` and `backend/models/scaler_x.pkl` to be available in the deployed function. Arrange private model delivery before relying on the forecast in production. TensorFlow and the model files also count toward Vercel's Python Function bundle size limit; check the deployment build and runtime logs after adding them.
+The Git deployment includes `backend/models/forecast.onnx` and `forecast_scaler.json`, exported from the teammate-provided Keras model and scaler with `python scripts/export_forecast.py`. This runs the same 3-hour forecast using ONNX Runtime instead of bundling TensorFlow. The original `.h5` and `.pkl` files remain local and ignored by Git. After replacing the originals, regenerate both exports and verify forecast results before deploying.
 
 The local development server remains `backend/server.py`; Vercel uses the root WSGI entrypoint.
 
