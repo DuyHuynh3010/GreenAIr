@@ -46,6 +46,14 @@ Then open:
 http://127.0.0.1:8000
 ```
 
+## Deploy on Vercel
+
+The repository exports `app:app` from the root `app.py` as a WSGI entrypoint. Vercel reads `pyproject.toml` for the entrypoint and the root `requirements.txt` for dependencies. Leave the Vercel project Root Directory at the repository root, with no custom build command or output directory.
+
+The trained model files are ignored by Git, so a GitHub deployment does not include them. `/api/predict/current` works without model files, but the 3-hour forecast requires `backend/models/best_lstm_regression_model.h5` and `backend/models/scaler_x.pkl` to be available in the deployed function. Arrange private model delivery before relying on the forecast in production. TensorFlow and the model files also count toward Vercel's Python Function bundle size limit; check the deployment build and runtime logs after adding them.
+
+The local development server remains `backend/server.py`; Vercel uses the root WSGI entrypoint.
+
 ## Local API
 
 - `GET /api/health` returns model readiness and model metadata.
